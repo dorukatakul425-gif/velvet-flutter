@@ -6,15 +6,37 @@ workflows:
     environment:
       flutter: stable
       groups: [velvet_config]
+      android_signing:
+        - velvet_keystore
     scripts:
       - name: Android projesini oluştur
         script: flutter create --platforms=android --project-name velvet_app --org com.velvet .
-      - name: Android izinlerini ekle
+      - name: Android izinlerini ve giriş bağlantısını ekle
         script: |
           M=android/app/src/main/AndroidManifest.xml
           perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <application|' "$M"
+          perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
+      - name: Release imzalamasını ayarla
+        script: |
+          cat > android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+          python3 - <<'PY'
+          p = 'android/app/build.gradle.kts'
+          s = open(p).read()
+          s = 'import java.util.Properties\nimport java.io.FileInputStream\n\n' + s
+          s = s.replace('android {', 'val keystoreProperties = Properties().apply {\n    load(FileInputStream(rootProject.file("key.properties")))\n}\n\nandroid {', 1)
+          s = s.replace('buildTypes {', 'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {', 1)
+          s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+          open(p, 'w').write(s)
+          PY
       - name: Paketleri yükle
         script: flutter pub get
       - name: APK oluştur
         script: flutter build apk --release --dart-define=LIVEKIT_TOKEN_ENDPOINT=$LIVEKIT_TOKEN_ENDPOINT
+      - name: İmza parmak izini yazdır
+        script: keytool -list -v -keystore "$CM_KEYSTORE_PATH" -alias "$CM_KEY_ALIAS" -storepass "$CM_KEYSTORE_PASSWORD" | grep -E "SHA1|SHA256"
     artifacts: [build/app/outputs/flutter-apk/*.apk]
