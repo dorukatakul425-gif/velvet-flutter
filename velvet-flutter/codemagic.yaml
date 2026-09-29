@@ -1,0 +1,20 @@
+workflows:
+  android-apk:
+    name: Velvet Android APK
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      groups: [velvet_config]
+    scripts:
+      - name: Android projesini oluştur
+        script: flutter create --platforms=android --project-name velvet_app --org com.velvet .
+      - name: Android izinlerini ekle
+        script: |
+          M=android/app/src/main/AndroidManifest.xml
+          perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <application|' "$M"
+      - name: Paketleri yükle
+        script: flutter pub get
+      - name: APK oluştur
+        script: flutter build apk --release --dart-define=LIVEKIT_TOKEN_ENDPOINT=$LIVEKIT_TOKEN_ENDPOINT
+    artifacts: [build/app/outputs/flutter-apk/*.apk]
