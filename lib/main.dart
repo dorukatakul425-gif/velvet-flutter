@@ -12,8 +12,8 @@ import 'home_screen.dart';
 import 'room_screen.dart' show RoomScreen;
 import 'profile_screen.dart' show ProfileScreen, jetonBalance;
 
-const _supabaseUrl = 'https://zahmbbxnormlrmxzniov.supabase.co';
-const _supabaseKey = 'sb_publishable_Vqg92ZP1gjmTUCaNJpI4Aw_BViwPPfj';
+const _supabaseUrl = 'https://jvbilhaajtfxtfljyqoi.supabase.co';
+const _supabaseKey = 'sb_publishable_VDPBDt0HFJSLOgnW-jQtyg_ADLj8WuU';
 bool _supabaseReady = false;
 
 Future<void> main() async {
