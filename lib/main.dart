@@ -7,6 +7,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'room_screen.dart' show RoomScreen;
+import 'profile_screen.dart' show openProfile;
 
 const kImg = 'https://xx-jade.vercel.app/images/images';
 const kBg = Color(0xFF07000F);
@@ -80,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ]),
-      bottomNavigationBar: _BottomNav(index: _tab, onTap: (i) { if (i == 2) { openRoom(context); return; } setState(() => _tab = i); }),
+      bottomNavigationBar: _BottomNav(index: _tab, onTap: (i) { if (i == 2) { openRoom(context); return; } if (i == 4) { openProfile(context); return; } setState(() => _tab = i); }),
     );
   }
 
