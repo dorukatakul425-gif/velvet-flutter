@@ -10,7 +10,11 @@ workflows:
         script: flutter create --platforms=android --project-name velvet_app --org com.velvet .
       - name: İnternet icazəsi (şəkillər üçün)
         script: |
-          perl -0pi -e 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <application/ unless \/android.permission.INTERNET\/' android/app/src/main/AndroidManifest.xml
+          M=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "android.permission.INTERNET" "$M"; then
+            perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$M"
+          fi
+          grep -n "INTERNET" "$M"
       - name: Paketlər
         script: flutter pub get
       - name: APK yığ
