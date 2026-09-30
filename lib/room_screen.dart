@@ -265,7 +265,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
                   ])),
                 ))),
               ),
-              SliverToBoxAdapter(child: SizedBox(height: 90 + pad.bottom)),
+              SliverToBoxAdapter(child: SizedBox(height: 70 + math.max(4, pad.bottom - 28))),
             ],
           ),
         ),
@@ -276,7 +276,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
               child: IgnorePointer(child: GiftBurst(key: ValueKey(_playing!.id), controller: _giftAnim, gift: _playing!))),
 
         // Alt panel
-        Positioned(left: 12, right: 12, bottom: math.max(8, pad.bottom), child: _bottomBar()),
+        Positioned(left: 12, right: 6, bottom: math.max(4, pad.bottom - 28), child: _bottomBar()),
 
         // Otaq menyusu
         IgnorePointer(
@@ -395,27 +395,44 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
         ]),
       );
 
+  void _soon(String t) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(t), duration: const Duration(milliseconds: 1500)));
+  }
+
   Widget _bottomBar() => SizedBox(
-        height: 50,
+        height: 42,
         child: Row(children: [
           Expanded(child: Pressable(
             onTap: _openChat,
             child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.centerLeft,
-              decoration: BoxDecoration(color: const Color(0xE0131145), borderRadius: BorderRadius.circular(25)),
-              child: const Text('〆   Bir şey de...', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14)),
+              height: 42,
+              padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+              decoration: BoxDecoration(color: const Color(0xB80C0826), borderRadius: BorderRadius.circular(24)),
+              child: Row(children: [
+                Expanded(child: Text('Yazın...', maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, color: Colors.white.withOpacity(.6)))),
+                const _WinkFace(size: 30),
+              ]),
             ),
           )),
-          const SizedBox(width: 6),
-          _RoundBtn(onTap: _openChat, badge: '32', child: const Icon(Icons.chat_bubble_outline_rounded, size: 23)),
-          const SizedBox(width: 6),
-          _RoundBtn(onTap: _toggleSpeaker, color: _speakerOn ? const Color(0xFF3157A8) : null, child: Icon(_speakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 23)),
-          const SizedBox(width: 6),
-          _RoundBtn(onTap: _toggleMic, color: _muted ? null : const Color(0xFF28A96B), child: Icon(_muted ? Icons.mic_off_rounded : Icons.mic_rounded, size: 23)),
-          const SizedBox(width: 6),
-          _RoundBtn(onTap: _openGifts, gradient: const LinearGradient(colors: [Color(0xFF5BE3EC), Color(0xFF9069FF)]), child: const Icon(Icons.card_giftcard_rounded, size: 23)),
+          const SizedBox(width: 12),
+          _RoundBtn(onTap: _toggleMic, color: _muted ? null : const Color(0xFF28A96B), child: Icon(_muted ? Icons.mic_off_rounded : Icons.mic_rounded, size: 22, color: const Color(0xFFD6D6DA))),
+          const SizedBox(width: 4),
+          _RoundBtn(onTap: _toggleSpeaker, child: Icon(_speakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 23, color: const Color(0xFFD6D6DA))),
+          const SizedBox(width: 4),
+          _RoundBtn(onTap: _openChat, badge: '2', color: const Color(0x21FFFFFF), child: const Icon(Icons.chat_bubble_rounded, size: 22, color: Color(0xFFE2E2E6))),
+          const SizedBox(width: 4),
+          _RoundBtn(onTap: () => _soon('Oyunlar tezliklə'), child: ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (r) => const LinearGradient(colors: [Color(0xFFB36BFF), Color(0xFF7A4BF0), Color(0xFFFFB84D)]).createShader(r),
+            child: const Icon(Icons.sports_esports_rounded, size: 26, color: Colors.white),
+          )),
+          const SizedBox(width: 4),
+          _RoundBtn(onTap: () => _soon('Katalog tezliklə'), child: const Icon(Icons.grid_view_rounded, size: 21, color: Color(0xFFD6D6DA))),
+          const SizedBox(width: 4),
+          _RoundBtn(onTap: _openGifts, child: const Icon(Icons.card_giftcard_rounded, size: 24, color: Color(0xFFFF7DA5))),
         ]),
       );
 }
@@ -462,18 +479,48 @@ class _RoundBtn extends StatelessWidget {
         child: Stack(clipBehavior: Clip.none, children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 220),
-            width: 42, height: 42,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: gradient == null ? (color ?? const Color(0xE6131145)) : null, gradient: gradient,
+            width: 38, height: 38,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: gradient == null ? (color ?? const Color(0xB80C0826)) : null, gradient: gradient,
                 boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 3))]),
             child: child,
           ),
-          if (badge != null) Positioned(right: -3, top: -6, child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(color: const Color(0xFFFF5A4F), borderRadius: BorderRadius.circular(14)),
-            child: Text(badge!, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+          if (badge != null) Positioned(right: -6, top: -9, child: Container(
+            constraints: const BoxConstraints(minWidth: 21, minHeight: 21),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            decoration: BoxDecoration(color: const Color(0xFFE8485F), borderRadius: BorderRadius.circular(11)),
+            child: Text(badge!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
           )),
         ]),
       );
+}
+
+class _WinkFace extends StatelessWidget {
+  final double size;
+  const _WinkFace({this.size = 30});
+  @override
+  Widget build(BuildContext context) => SizedBox(width: size, height: size, child: CustomPaint(painter: _WinkPainter()));
+}
+
+class _WinkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 32, size.height / 32);
+    const dark = Color(0xFF2A2A30);
+    canvas.drawCircle(const Offset(16, 16), 14.5, Paint()..color = const Color(0xFFD6D6DA));
+    canvas.drawOval(Rect.fromCenter(center: const Offset(11, 12.6), width: 3.6, height: 5), Paint()..color = dark);
+    final wink = Path()..moveTo(18.4, 10.6)..relativeLineTo(4.8, 2)..relativeLineTo(-4.8, 2);
+    canvas.drawPath(wink, Paint()..color = dark..style = PaintingStyle.stroke..strokeWidth = 2.2..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+    final mouth = Path()..moveTo(7.4, 17.2)..relativeCubicTo(0, 4.9, 3.7, 8.4, 8.6, 8.4)..relativeCubicTo(4.9, 0, 8.6, -3.5, 8.6, -8.4)..close();
+    canvas.drawPath(mouth, Paint()..color = dark);
+    final tongue = Path()..moveTo(11.4, 23.4)..relativeCubicTo(1.2, 1.1, 2.7, 1.7, 4.6, 1.7)..relativeCubicTo(1.9, 0, 3.4, -0.6, 4.6, -1.7)..relativeCubicTo(-1.2, -1.5, -2.7, -2.2, -4.6, -2.2)..relativeCubicTo(-1.9, 0, -3.4, 0.7, -4.6, 2.2)..close();
+    canvas.drawPath(tongue, Paint()..color = const Color(0xFF9C9CA3));
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _MenuCircle extends StatelessWidget {
