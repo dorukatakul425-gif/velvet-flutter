@@ -1,1226 +1,816 @@
-// Velvet — Profil ekranı (Flutter). Düzən index.tsx-dəki profil ilə eynidir.
+// Velvet — Profil ekranı + Ziyarətçi profili (Flutter)
+//
+// QURAŞDIRMA
+//  1) pubspec.yaml → dependencies: altına əlavə et:
+//        flutter_svg: ^2.0.10
+//  2) Bu faylı lib/profile_screen.dart kimi saxla.
+//  3) main.dart-ı bununla əvəz et:  export 'profile_screen.dart';  və ya birbaşa bu faylı işə sal.
+//
+// 120 HZ ÜÇÜN
+//  • iOS: ios/Runner/Info.plist içinə əlavə et →
+//        <key>CADisableMinimumFrameDurationOnPhone</key><true/>
+//  • Android: flutter_displaymode paketi ilə ən yüksək yeniləmə tezliyini seç.
+//
+// PERFORMANS QAYDALARI (kodda tətbiq olunub)
+//  • Hər animasiya öz RepaintBoundary-sində, yalnız lazım olan hissə yenidən çəkilir.
+//  • Scroll zamanı setState yoxdur; bütün ekran yenidən qurulmur.
+//  • Bulanıqlıq (blur/BackdropFilter) əvəzinə ucuz RadialGradient işıqlanma.
+//  • Sayğac yalnız bir Text-i yeniləyir (ValueListenableBuilder).
+//  • Ulduzlar tək CustomPainter ilə çəkilir (repaint: animasiya).
+//  • SVG ikonlar sətir açarı ilə keşlənir.
+import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'common.dart' show appLogout;
-import 'vip_screen.dart';
-import 'legal_texts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-const _img = 'https://xx-jade.vercel.app/images/images';
-const _bg = Color(0xFF07000F);
-const _purple = Color(0xFF7B2FF7);
-const _pink = Color(0xFFFF3EA5);
-const _lilac = Color(0xFFC084FC);
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  ));
+  runApp(const VelvetApp());
+}
 
-/// Tətbiq üzrə ortaq vəziyyət
-final jetonBalance = ValueNotifier<int>(10000);
-final activeFrame = ValueNotifier<String?>(null);
+class VelvetApp extends StatelessWidget {
+  const VelvetApp({super.key});
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
+        home: const ProfileScreen(),
+      );
+}
 
-const kFrames = [
-  ('gold', 'Qızıl Qanadlar', 'frame-gold-flap', Color(0xFFFFD700)),
-  ('red', 'Qırmızı Qanadlar', 'frame-red-flap', Color(0xFFFF6060)),
-  ('blue', 'Mavi Qanadlar', 'frame-blue-flap', Color(0xFF60A0FF)),
-  ('green', 'Yaşıl Qanadlar', 'frame-green-flap', Color(0xFF50C878)),
-  ('butterfly-sakura', 'Kəpənək Sakura', 'frame-butterfly-sakura', Color(0xFFFF80C0)),
-  ('cyber-wings', 'Kiber Qanadlar', 'frame-cyber-wings', Color(0xFF00D4FF)),
-  ('dragon-obsidian', 'Obsidian Əjdaha', 'frame-dragon-obsidian', Color(0xFFA060FF)),
-];
+/* ───────────── Rənglər ───────────── */
+const kBg = Color(0xFF07000F);
+const kPurple = Color(0xFF7B2FF7);
+const kPink = Color(0xFFFF3EA5);
+const kLilac = Color(0xFFC084FC);
+const kTeal = Color(0xFF19D4B4);
+const kMut = Color(0x8CE9E2FF);
+const kInk = Color(0xFFF1EAFF);
+
+/* ───────────── SVG ikonlar ───────────── */
+const _defs = r'''<defs>
+<linearGradient id="gGr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cf0c4"/><stop offset="1" stop-color="#1fb58a"/></linearGradient>
+<linearGradient id="gBl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6cc4ff"/><stop offset="1" stop-color="#3a78f0"/></linearGradient>
+<linearGradient id="gPk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7aa8"/><stop offset="1" stop-color="#e8306a"/></linearGradient>
+<linearGradient id="gOr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#f26b2a"/></linearGradient>
+<linearGradient id="gYe" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe35c"/><stop offset="1" stop-color="#f5a800"/></linearGradient>
+<linearGradient id="gPu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b98bff"/><stop offset="1" stop-color="#6a3ae0"/></linearGradient>
+<linearGradient id="gGo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe680"/><stop offset="1" stop-color="#f0a000"/></linearGradient>
+<linearGradient id="gDi" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fe0ff"/><stop offset="1" stop-color="#1c7cf0"/></linearGradient>
+<linearGradient id="gSi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#b3b9d6"/></linearGradient>
+</defs>''';
+
+const Map<String, (String, String)> _icons = {
+  'wallet': ('0 0 32 32', '<rect x="2" y="6" width="28" height="20" rx="7" fill="url(#gGr)"/><rect x="18" y="12" width="12" height="9" rx="4.5" fill="#d8fff0" opacity=".9"/><circle cx="23.5" cy="16.5" r="1.8" fill="#1fb58a"/>'),
+  'family': ('0 0 32 32', '<path d="M6 4h20a4 4 0 014 4v15a4 4 0 01-4 4h-7l-3 3-3-3H6a4 4 0 01-4-4V8a4 4 0 014-4z" fill="url(#gBl)"/><circle cx="12.5" cy="12.5" r="3.4" fill="#fff"/><path d="M6.5 21c0-3.6 2.6-5.3 6-5.3s6 1.7 6 5.3z" fill="#fff"/><circle cx="21.5" cy="13.5" r="2.6" fill="#dff0ff"/><path d="M19 19.5c.8-1.6 2.2-2.3 4-2.3 2.2 0 3.5 1.2 3.5 3.3h-7.5z" fill="#dff0ff"/>'),
+  'heart': ('0 0 32 32', '<path d="M16 29C3 20 2 11.5 8.5 7.5 12.3 5.3 15 7.5 16 9.6 17 7.5 19.7 5.3 23.5 7.5 30 11.5 29 20 16 29z" fill="url(#gPk)"/><path d="M6.5 16.5h5l2-4 3.5 8 2-4h6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'),
+  'svip': ('0 0 32 32', '<path d="M3 10l7 6 6-11 6 11 7-6-3 16H6z" fill="url(#gOr)"/><path d="M16 14l3.5 5L16 24l-3.5-5z" fill="#fff" opacity=".92"/><circle cx="3.5" cy="10" r="2" fill="#ffd38a"/><circle cx="28.5" cy="10" r="2" fill="#ffd38a"/><circle cx="16" cy="4.5" r="2" fill="#ffd38a"/>'),
+  'vip': ('0 0 32 32', '<path d="M4 9.5C4 8 5 7 6.5 7h19c1.5 0 2.5 1 2.5 2.5 0 1-.3 1.8-.9 2.6L17.3 26.4c-.6.9-2 .9-2.6 0L4.9 12.1C4.3 11.3 4 10.5 4 9.5z" fill="url(#gYe)"/><path d="M10.5 11.5L16 20l5.5-8.5" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>'),
+  'store': ('0 0 32 32', '<rect x="5" y="14" width="22" height="14" rx="4" fill="#ffc08a"/><path d="M6 4h20l4 9c0 2.3-1.8 4-4 4s-4-1.7-4-4c0 2.3-1.8 4-4 4s-4-1.7-4-4c0 2.3-1.8 4-4 4s-4-1.7-4-4z" fill="url(#gOr)"/><rect x="11.5" y="20" width="9" height="4.5" rx="2.2" fill="#fff" opacity=".9"/>'),
+  'shirt': ('0 0 32 32', '<path d="M11 3L3 7.5l3.5 7L10 12.5V28h12V12.5l3.5 2 3.5-7L21 3c-1 2.5-2.8 3.8-5 3.8S12 5.5 11 3z" fill="url(#gPu)"/><path d="M16 12.5l1.5 3.7 3.7 1.5-3.7 1.5L16 23l-1.5-3.8-3.7-1.5 3.7-1.5z" fill="#fff"/>'),
+  'invite': ('0 0 32 32', '<rect x="4" y="10" width="24" height="18" rx="6" fill="none" stroke="#f1eaff" stroke-width="2.4"/><rect x="10" y="3.5" width="12" height="9" rx="3.5" fill="#19d4b4" stroke="#f1eaff" stroke-width="2.4"/>'),
+  'agent': ('0 0 32 32', '<path d="M16 3.5l10 3.3V15c0 7-4.5 11-10 13.5C10.5 26 6 22 6 15V6.8z" fill="none" stroke="#f1eaff" stroke-width="2.4" stroke-linejoin="round"/><path d="M16 10.5l1.6 3.2 3.5.5-2.5 2.5.6 3.5-3.2-1.7-3.2 1.7.6-3.5-2.5-2.5 3.5-.5z" fill="#19d4b4"/>'),
+  'chat': ('0 0 32 32', '<path d="M16 4C9 4 4 8.8 4 14.5c0 3 1.4 5.6 3.7 7.5L6 27.5l5.8-2.6c1.3.4 2.7.6 4.2.6 7 0 12-4.8 12-10.5S23 4 16 4z" fill="none" stroke="#f1eaff" stroke-width="2.4" stroke-linejoin="round"/><path d="M11.5 14.5q4.5 4.5 9 0" fill="none" stroke="#19d4b4" stroke-width="2.4" stroke-linecap="round"/>'),
+  'fb': ('0 0 32 32', '<path d="M20 5H10a6 6 0 00-6 6v11a6 6 0 006 6h12a6 6 0 006-6v-8" fill="none" stroke="#f1eaff" stroke-width="2.4" stroke-linecap="round"/><path d="M9.5 21q3 2.5 6 0" fill="none" stroke="#f1eaff" stroke-width="2.4" stroke-linecap="round"/><path d="M27 3l-9 9" stroke="#19d4b4" stroke-width="3.2" stroke-linecap="round"/>'),
+  'set': ('0 0 32 32', '<path d="M16 3l11 6.3v12.4L16 28 5 21.7V9.3z" fill="none" stroke="#f1eaff" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="15.5" r="4.2" fill="none" stroke="#19d4b4" stroke-width="3"/>'),
+  'coin': ('0 0 24 24', '<circle cx="12" cy="12" r="11" fill="url(#gGo)"/><circle cx="12" cy="12" r="8" fill="none" stroke="#fff3b0" stroke-width="1.2"/><path d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z" fill="#fff6c8"/>'),
+  'gem': ('0 0 24 24', '<path d="M6 3h12l5 6-11 13L1 9z" fill="url(#gDi)"/><path d="M1 9h22M8.5 9L12 22l3.5-13M6 3l2.5 6L12 3l3.5 6L18 3" fill="none" stroke="#dff6ff" stroke-width=".9" opacity=".8"/>'),
+  'chev': ('0 0 16 16', '<path d="M5.5 2.5L11 8l-5.5 5.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
+  'copy': ('0 0 16 16', '<rect x="5" y="5" width="9" height="9" rx="2.5" fill="#9c93b8"/><path d="M11 3.5V3.2C11 2.5 10.5 2 9.8 2H3.2C2.5 2 2 2.5 2 3.2v6.6C2 10.5 2.5 11 3.2 11h.3" fill="none" stroke="#9c93b8" stroke-width="1.6" stroke-linecap="round"/>'),
+  'edit': ('0 0 32 32', '<path d="M17 5H9a5 5 0 00-5 5v13a5 5 0 005 5h13a5 5 0 005-5v-8" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"/><path d="M12 20l1-5L26 3l3 3-12 13z" fill="none" stroke="#fff" stroke-width="2.8" stroke-linejoin="round"/>'),
+  'back': ('0 0 24 24', '<path d="M15 4l-8 8 8 8" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'),
+  'clock': ('0 0 16 16', '<circle cx="8" cy="8" r="6.5" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>'),
+  'lv': ('0 0 16 16', '<circle cx="8" cy="8" r="8" fill="#0fae5f"/><path d="M8 3l4.5 8h-9z" fill="#0b3b27" stroke="#7dffb8" stroke-width="1" stroke-linejoin="round"/>'),
+  'hg': ('0 0 16 16', '<circle cx="8" cy="8" r="8" fill="#ffd6ec"/><path d="M8 13C3 10 3 6 5.5 5c1.2-.4 2 .4 2.5 1.2C8.5 5.4 9.3 4.6 10.5 5 13 6 13 10 8 13z" fill="#ff5fa8"/><path d="M8 5.5l1.5 2L8 10 6.5 7.5z" fill="#fff"/>'),
+  'age': ('0 0 16 16', '<circle cx="8" cy="8" r="6.3" fill="none" stroke="#b8afd6" stroke-width="1.4"/><circle cx="6" cy="7" r=".9" fill="#b8afd6"/><circle cx="10" cy="7" r=".9" fill="#b8afd6"/><path d="M5.5 9.5q2.5 2 5 0" fill="none" stroke="#b8afd6" stroke-width="1.2" stroke-linecap="round"/>'),
+  'leaf': ('0 0 16 16', '<circle cx="8" cy="8" r="8" fill="#fff" opacity=".9"/><path d="M4 11.5C4 7 7 4 12 4c0 5-3 8-7 8M4 12l4-4" fill="#2fbf4a" stroke="#1d8f35" stroke-width=".8" stroke-linecap="round"/>'),
+  'gift': ('0 0 64 64', '<ellipse cx="44" cy="55" rx="15" ry="5" fill="#d98a00"/><ellipse cx="44" cy="51" rx="15" ry="5" fill="url(#gGo)"/><ellipse cx="44" cy="47" rx="15" ry="5" fill="#ffe680"/><ellipse cx="44" cy="43" rx="15" ry="5" fill="url(#gGo)"/><rect x="6" y="28" width="38" height="28" rx="5" fill="url(#gPk)"/><rect x="3" y="20" width="44" height="12" rx="4" fill="url(#gOr)"/><rect x="21" y="20" width="8" height="36" fill="#ffe35c"/><path d="M25 20c-7-2-13-4-11-9s9-2 11 9zm0 0c7-2 13-4 11-9s-9-2-11 9z" fill="#ffd23c" stroke="#f5a800" stroke-width="1.5"/>'),
+  'b1': ('0 0 48 48', '<path d="M24 2l6 4 7-1 3 7 6 4-2 7 2 7-6 4-3 7-7-1-6 4-6-4-7 1-3-7-6-4 2-7-2-7 6-4 3-7 7 1z" fill="url(#gOr)"/><circle cx="24" cy="24" r="14" fill="#7a3a10" opacity=".35"/><path d="M24 14l9 8-9 13-9-13z" fill="#ffe3b8"/><path d="M15 22h18M24 14l-3 8 3 13 3-13z" fill="none" stroke="#f29a4a" stroke-width="1.2"/>'),
+  'b2': ('0 0 48 48', '<circle cx="24" cy="24" r="20" fill="url(#gPk)" stroke="#ffd38a" stroke-width="2.5"/><circle cx="24" cy="24" r="12.5" fill="none" stroke="#ffd38a" stroke-width="2"/><circle cx="24" cy="24" r="5.5" fill="#ffd38a"/><path d="M4 26l-2 8 6-2M44 26l2 8-6-2" fill="#ffb347"/>'),
+  'car': ('0 0 64 40', '<path d="M3 27c0-4 3-6 8-7l11-8c2-1.5 4-2 7-2h10c4 0 7 1.5 9 4l5 5c4 1 8 2 8 6v3c0 1.5-1 2.5-2.5 2.5H5.5C4 30.5 3 29.5 3 28z" fill="url(#gSi)"/><path d="M24 14l-7 6h14v-7h-4c-1 0-2 .4-3 1zm10-1v7h13l-4-5c-1-1.5-3-2-5-2z" fill="#7f8fd0" opacity=".85"/><circle cx="18" cy="31" r="6" fill="#2b2540" stroke="#c6cbe2" stroke-width="2"/><circle cx="48" cy="31" r="6" fill="#2b2540" stroke="#c6cbe2" stroke-width="2"/>'),
+  'cal': ('0 0 24 24', '<rect x="3" y="5" width="18" height="16" rx="4" fill="url(#gYe)"/><rect x="3" y="5" width="18" height="6" rx="3" fill="#ffc21c"/><rect x="7" y="2.5" width="2.5" height="5" rx="1.2" fill="#ffe680"/><rect x="14.5" y="2.5" width="2.5" height="5" rx="1.2" fill="#ffe680"/>'),
+  'pen': ('0 0 24 24', '<path d="M4 19l1-5L16 3l5 5L10 19z" fill="url(#gYe)"/><path d="M3 22h18" stroke="#ffd23c" stroke-width="2" stroke-linecap="round"/>'),
+};
+
+/// SVG ikon (sətir açarı ilə keşlənir)
+class Ico extends StatelessWidget {
+  final String name;
+  final double size;
+  final double? height;
+  final double opacity;
+  const Ico(this.name, {super.key, this.size = 24, this.height, this.opacity = 1});
+  static final _cache = <String, String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final svg = _cache.putIfAbsent(name, () {
+      final i = _icons[name]!;
+      return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="${i.$1}">$_defs${i.$2}</svg>';
+    });
+    final w = SvgPicture.string(svg, width: size, height: height ?? size);
+    return opacity == 1 ? w : Opacity(opacity: opacity, child: w);
+  }
+}
+
+/* ───────────── Ortaq köməkçilər ───────────── */
+void velvetToast(BuildContext c, String m) {
+  ScaffoldMessenger.of(c)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(
+      content: Text(m, textAlign: TextAlign.center),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: const Color(0xFF241F2E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.fromLTRB(40, 0, 40, 30),
+      duration: const Duration(milliseconds: 1400),
+    ));
+}
 
 Route<T> _slide<T>(Widget page) => PageRouteBuilder<T>(
       transitionDuration: const Duration(milliseconds: 420),
       reverseTransitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, a, __, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
-        child: SlideTransition(
-          position: Tween(begin: const Offset(.08, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
-          child: child,
-        ),
-      ),
+      transitionsBuilder: (_, a, __, child) {
+        final c = CurvedAnimation(parent: a, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: a,
+          child: SlideTransition(position: Tween(begin: const Offset(.12, 0), end: Offset.zero).animate(c), child: child),
+        );
+      },
     );
 
-/// Profilə axıcı keçid
-void openProfile(BuildContext context) {
-  Navigator.of(context).push(PageRouteBuilder(
-    transitionDuration: const Duration(milliseconds: 420),
-    reverseTransitionDuration: const Duration(milliseconds: 320),
-    pageBuilder: (_, __, ___) => const ProfileScreen(),
-    transitionsBuilder: (_, a, __, child) => FadeTransition(
-      opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
-      child: SlideTransition(
-        position: Tween(begin: const Offset(.08, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
-        child: child,
-      ),
-    ),
-  ));
+/// Girişdə aşağıdan yuxarı yumşaq çıxış
+class _Reveal extends StatefulWidget {
+  final int delay;
+  final Widget child;
+  const _Reveal({this.delay = 0, required this.child});
+  @override
+  State<_Reveal> createState() => _RevealState();
 }
 
+class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
+  late final int _total = 500 + widget.delay;
+  late final AnimationController _c = AnimationController(vsync: this, duration: Duration(milliseconds: _total))..forward();
+  late final Animation<double> _a = CurvedAnimation(parent: _c, curve: Interval(widget.delay / _total, 1, curve: Curves.easeOutCubic));
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _a,
+        child: widget.child,
+        builder: (_, c) => Opacity(opacity: _a.value, child: Transform.translate(offset: Offset(0, 14 * (1 - _a.value)), child: c)),
+      );
+}
+
+/// Fırlanan rəngli halqalı avatar
+class _Avatar extends StatelessWidget {
+  final double size;
+  final Animation<double> ring;
+  final bool online;
+  const _Avatar({required this.size, required this.ring, this.online = false});
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: SizedBox(
+          width: size, height: size,
+          child: Stack(children: [
+            RotationTransition(
+              turns: ring,
+              child: const RepaintBoundary(child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: SweepGradient(colors: [Color(0xFFFFD700), Color(0xFFFF8C00), kLilac, kPurple, kTeal, Color(0xFFFFD700)]),
+                  boxShadow: [BoxShadow(color: Color(0x667B2FF7), blurRadius: 22)],
+                ),
+                child: SizedBox.expand(),
+              )),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(3),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFB06BFF), Color(0xFF6A2BE0)]),
+                ),
+                child: Center(child: Text('V', style: TextStyle(
+                  fontSize: size * .41, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: Colors.white,
+                  shadows: const [Shadow(color: Color(0xFF4A1AA8), offset: Offset(0, 2))],
+                ))),
+              ),
+            ),
+            if (online)
+              Positioned(right: 3, bottom: 5, child: Container(
+                width: 15, height: 15,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF00FF88), border: Border.all(color: kBg, width: 2.5)),
+              )),
+          ]),
+        ),
+      );
+}
+
+class _Chip extends StatelessWidget {
+  final String icon, text;
+  final Gradient? grad;
+  final Color fg;
+  const _Chip(this.icon, this.text, {this.grad, this.fg = Colors.white});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(5, 3, 9, 3),
+        decoration: BoxDecoration(
+          gradient: grad,
+          color: grad == null ? const Color(0x17FFFFFF) : null,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Ico(icon, size: 16),
+          const SizedBox(width: 4),
+          Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: fg)),
+        ]),
+      );
+}
+
+/* ═════════════════ PROFİL EKRANI ═════════════════ */
 class ProfileScreen extends StatefulWidget {
-  final String name;
-  final String userId;
-  final String bio;
-  final String country;
-  final String flag;
-  final String city;
-  final int age;
-  final int days;
-  final int vip;
-  const ProfileScreen({
-    super.key,
-    this.name = 'Velvet istifadəçisi',
-    this.userId = '48219037',
-    this.bio = '',
-    this.country = 'Azərbaycan',
-    this.flag = '🇦🇿',
-    this.city = 'Bakı',
-    this.age = 22,
-    this.days = 142,
-    this.vip = 0,
-  });
+  const ProfileScreen({super.key});
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMixin {
-  final _scroll = ScrollController();
-  double _offset = 0;
-  bool _copied = false;
-  late final _p = _ProfileData(widget.name, widget.bio, widget.country, widget.flag, widget.city, widget.age);
+  static const _name = 'Velvet istifadəçisi';
+  static const _id = '48219037';
+
   late final _ring = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
-  late final _glow = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat(reverse: true);
+  late final _aur = AnimationController(vsync: this, duration: const Duration(seconds: 9))..repeat(reverse: true);
+  late final _gift = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+  late final _shine = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600))..repeat();
+  final _left = ValueNotifier<int>(3 * 86400 + 23 * 3600 + 56 * 60 + 9);
+  final _copied = ValueNotifier<bool>(false);
+  Timer? _tick;
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(() => setState(() => _offset = _scroll.offset));
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) { if (_left.value > 0) _left.value--; });
   }
 
   @override
-  void dispose() { _scroll.dispose(); _ring.dispose(); _glow.dispose(); super.dispose(); }
-
-  void _copyId() {
-    Clipboard.setData(ClipboardData(text: widget.userId));
-    HapticFeedback.lightImpact();
-    setState(() => _copied = true);
-    Future.delayed(const Duration(milliseconds: 1500), () { if (mounted) setState(() => _copied = false); });
+  void dispose() {
+    _tick?.cancel();
+    _ring.dispose(); _aur.dispose(); _gift.dispose(); _shine.dispose();
+    _left.dispose(); _copied.dispose();
+    super.dispose();
   }
 
-  void _visitors() => _toast('Hələ profil ziyarətçisi yoxdur');
+  void _copyId() {
+    Clipboard.setData(const ClipboardData(text: _id));
+    HapticFeedback.lightImpact();
+    _copied.value = true;
+    velvetToast(context, 'ID kopyalandı');
+    Future.delayed(const Duration(milliseconds: 1500), () { if (mounted) _copied.value = false; });
+  }
 
-  void _toast(String t) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(t, textAlign: TextAlign.center),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF241F2E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        margin: const EdgeInsets.fromLTRB(40, 0, 40, 90),
-        duration: const Duration(milliseconds: 1400),
-      ));
+  String _fmt(int s) {
+    String p(int n) => n.toString().padLeft(2, '0');
+    final d = s ~/ 86400, r = s % 86400;
+    return '$d gün ${p(r ~/ 3600)}:${p(r % 3600 ~/ 60)}:${p(r % 60)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final barSolid = _offset > 170;
     return Scaffold(
-      backgroundColor: _bg,
       body: Stack(children: [
-        // Arxa plan parıltısı
-        const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
-          gradient: RadialGradient(center: Alignment(.4, -1), radius: 1.2, colors: [Color(0x597B2FF7), Color(0x0007000F)]),
-        ))),
+        Positioned(top: 0, left: 0, right: 0, height: 340, child: IgnorePointer(child: RepaintBoundary(child: _Aurora(ctrl: _aur)))),
         CustomScrollView(
-          controller: _scroll,
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           slivers: [
-            SliverToBoxAdapter(child: _hero()),
-            SliverToBoxAdapter(child: Transform.translate(offset: const Offset(0, -20), child: _info())),
-            SliverToBoxAdapter(child: _Entrance(delay: 140, child: _vipRow())),
-            SliverToBoxAdapter(child: _menu()),
-            SliverToBoxAdapter(child: _Entrance(delay: 520, child: _logout())),
+            SliverToBoxAdapter(child: Padding(
+              padding: EdgeInsets.fromLTRB(18, top + 10, 18, 0),
+              child: Align(alignment: Alignment.centerRight, child: _Tap(
+                onTap: () => velvetToast(context, 'Profili redaktə et'),
+                child: const Ico('edit', size: 28),
+              )),
+            )),
+            SliverToBoxAdapter(child: _Reveal(child: _header())),
+            SliverToBoxAdapter(child: _Reveal(delay: 80, child: _stats())),
+            SliverToBoxAdapter(child: _Reveal(delay: 160, child: _banner())),
+            SliverToBoxAdapter(child: _Reveal(delay: 240, child: _card1())),
+            SliverToBoxAdapter(child: _Reveal(delay: 320, child: _card2())),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
         ),
-        // Üst panel
-        Positioned(
-          top: 0, left: 0, right: 0,
-          child: ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: barSolid ? 16 : 0, sigmaY: barSolid ? 16 : 0),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                color: barSolid ? const Color(0xD90D001E) : Colors.transparent,
-                padding: EdgeInsets.fromLTRB(8, top + 4, 8, 4),
-                child: Row(children: [
-                  _NavIcon(icon: Icons.arrow_back_ios_new_rounded, onTap: () => Navigator.maybePop(context)),
-                  Expanded(child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 250),
-                    opacity: barSolid ? 1 : 0,
-                    child: Text(_p.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  )),
-                  _NavIcon(icon: Icons.visibility_outlined, onTap: _visitors),
-                  _NavIcon(icon: Icons.edit_outlined, onTap: () => Navigator.of(context).push(_slide(_EditProfile(data: _p))).then((_) => setState(() {}))),
+      ]),
+    );
+  }
+
+  Widget _header() => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () { HapticFeedback.selectionClick(); Navigator.of(context).push(_slide(const PublicProfileScreen())); },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+          child: Row(children: [
+            _Avatar(size: 78, ring: _ring),
+            const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(_name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 7),
+              const Wrap(spacing: 6, runSpacing: 6, children: [_Chip('lv', 'Zənginlik:Sv.1'), _Chip('hg', 'Aktiv deyil')]),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: _copyId,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('ID:$_id', style: TextStyle(fontSize: 12, color: kMut)),
+                  const SizedBox(width: 5),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _copied,
+                    builder: (_, c, __) => AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: Ico(c ? 'lv' : 'copy', key: ValueKey(c), size: 14),
+                    ),
+                  ),
                 ]),
+              ),
+            ])),
+            const Ico('chev', size: 16, opacity: .4),
+          ]),
+        ),
+      );
+
+  Widget _stats() {
+    Widget s(String n, String l) => Expanded(child: Column(children: [
+          Text(n, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(l, style: const TextStyle(fontSize: 12, color: kMut)),
+        ]));
+    Widget d() => Container(width: 1, height: 26, color: const Color(0x1AFFFFFF));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 22, 10, 0),
+      child: Row(children: [s('2', 'Otaq'), d(), s('2', 'Ziyarətçi'), d(), s('1', 'İzlənilən'), d(), s('0', 'İzləyici')]),
+    );
+  }
+
+  Widget _banner() => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 26, 14, 0),
+        child: GestureDetector(
+          onTap: () => velvetToast(context, 'Məhdud vaxtlı mükafat'),
+          child: RepaintBoundary(
+            child: Container(
+              height: 84,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0x6619D4B4), width: 1.5),
+                gradient: const LinearGradient(colors: [Color(0x38FF3EA5), Color(0x477B2FF7), Color(0x3819D4B4)]),
+                boxShadow: const [BoxShadow(color: Color(0x407B2FF7), blurRadius: 22)],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(children: [
+                Positioned.fill(child: AnimatedBuilder(
+                  animation: _shine,
+                  builder: (_, __) {
+                    final v = Curves.easeInOut.transform((_shine.value * 1.6).clamp(0.0, 1.0));
+                    return Align(
+                      alignment: Alignment(-1.5 + 3.2 * v, 0),
+                      child: Transform(
+                        transform: Matrix4.skewX(-.35),
+                        child: Container(width: 60, height: 120, decoration: const BoxDecoration(
+                          gradient: LinearGradient(colors: [Color(0x00FFFFFF), Color(0x38FFFFFF), Color(0x00FFFFFF)]),
+                        )),
+                      ),
+                    );
+                  },
+                )),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 10, 6),
+                  child: Row(children: [
+                    AnimatedBuilder(
+                      animation: _gift,
+                      child: const Ico('gift', size: 62),
+                      builder: (_, c) {
+                        final e = Curves.easeInOut.transform(_gift.value);
+                        return Transform.translate(offset: Offset(0, -5 * e), child: Transform.rotate(angle: -.07 * e, child: c));
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Yeni istifadəçiyə özəl mükafat', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      SizedBox(height: 2),
+                      Text('1652 jetona qədər qazan!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFFFF6B6B))),
+                    ])),
+                    const Ico('chev', size: 16, opacity: .7),
+                  ]),
+                ),
+                Positioned(top: 0, left: 0, right: 0, child: Center(child: Container(
+                  padding: const EdgeInsets.fromLTRB(22, 2, 22, 3),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(colors: [Color(0xFFE8364F), Color(0xFFF0894F)]),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Ico('clock', size: 13),
+                    const SizedBox(width: 4),
+                    ValueListenableBuilder<int>(
+                      valueListenable: _left,
+                      builder: (_, s, __) => Text(_fmt(s), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                    ),
+                  ]),
+                ))),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+  Widget _card1() => _MenuCard(rows: [
+        _Item('wallet', 'Pulqabı', () => velvetToast(context, 'Pulqabı'), right: Container(
+          padding: const EdgeInsets.fromLTRB(6, 5, 13, 5),
+          decoration: BoxDecoration(color: const Color(0x14FFFFFF), borderRadius: BorderRadius.circular(18)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: const [
+            Ico('coin', size: 20), SizedBox(width: 6),
+            Text('40', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            SizedBox(width: 8), SizedBox(width: 1, height: 14, child: ColoredBox(color: Color(0x33FFFFFF))), SizedBox(width: 8),
+            Ico('gem', size: 20), SizedBox(width: 6),
+            Text('0', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ]),
+        )),
+        _Item('family', 'Ailə', () => velvetToast(context, 'Ailə'), right: Row(mainAxisSize: MainAxisSize.min, children: const [
+          Ico('coin', size: 18), SizedBox(width: 5),
+          Text('Qoşul, ', style: TextStyle(fontSize: 13, color: kMut)),
+          Text('30 Jeton qazan', style: TextStyle(fontSize: 13, color: Color(0xFFFFA033))),
+        ])),
+        _Item('heart', 'Yaxın dost', () => velvetToast(context, 'Yaxın dost'), text: 'İlk yaxın dostunu əlavə et'),
+        _Item('svip', 'SVIP', () => velvetToast(context, 'SVIP'), text: 'Get və aç'),
+        _Item('vip', 'VIP', () => velvetToast(context, 'VIP'), text: 'Get və aç'),
+        _Item('store', 'Mağaza', () => velvetToast(context, 'Mağaza')),
+        _Item('shirt', 'Aksesuar', () => velvetToast(context, 'Aksesuar')),
+      ]);
+
+  Widget _card2() => _MenuCard(rows: [
+        _Item('invite', 'Dost dəvət et', () => velvetToast(context, 'Dost dəvət et'), text: 'Jeton qazan', color: const Color(0xFFFFB020)),
+        _Item('agent', 'Agentlik Meydanı', () => velvetToast(context, 'Agentlik Meydanı')),
+        _Item('chat', 'Onlayn müştəri xidməti', () => velvetToast(context, 'Onlayn müştəri xidməti')),
+        _Item('fb', 'Problem bildir', () => velvetToast(context, 'Problem bildir')),
+        _Item('set', 'Parametrlər', () => velvetToast(context, 'Parametrlər'), text: 'Hesabınız risk altındadır, e-poçt bağlayın', color: const Color(0xFFFF6B8A)),
+      ]);
+}
+
+/* ─────────── Menyu komponentləri ─────────── */
+class _Item {
+  final String icon, label;
+  final VoidCallback onTap;
+  final Widget? right;
+  final String? text;
+  final Color color;
+  const _Item(this.icon, this.label, this.onTap, {this.right, this.text, this.color = kMut});
+}
+
+class _MenuCard extends StatelessWidget {
+  final List<_Item> rows;
+  const _MenuCard({required this.rows});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+        child: RepaintBoundary(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0x0DFFFFFF),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0x24965AF0)),
+              boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 22, offset: Offset(0, 6))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Column(children: [for (final r in rows) _MenuRow(item: r)]),
               ),
             ),
           ),
         ),
-      ]),
-    );
-  }
-
-  /* ─── Üst fon (paralaks + dartılma) ─── */
-  Widget _hero() {
-    final stretch = _offset < 0 ? -_offset : 0.0;
-    final parallax = _offset > 0 ? _offset * .45 : 0.0;
-    return SizedBox(
-      height: 240 + stretch,
-      child: Stack(fit: StackFit.expand, clipBehavior: Clip.hardEdge, children: [
-        Transform.translate(
-          offset: Offset(0, parallax - stretch),
-          child: Transform.scale(
-            scale: 1 + stretch / 400,
-            alignment: Alignment.topCenter,
-            child: Container(
-              decoration: const BoxDecoration(gradient: RadialGradient(
-                center: Alignment(-.4, -.2), radius: 1.1,
-                colors: [Color(0xE63A0070), Color(0xFF0D001E)],
-              )),
-              child: Stack(children: [
-                const Positioned(right: -40, top: -30, child: _Glow(size: 260, color: Color(0x997B0050))),
-                Positioned(right: 24, bottom: -20, child: Text('V', style: TextStyle(fontSize: 180, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: _purple.withOpacity(.06)))),
-                AnimatedBuilder(
-                  animation: _ring,
-                  builder: (_, __) => Positioned(left: -80, top: -100, child: Transform.rotate(
-                    angle: _ring.value * 2 * math.pi / 2.5,
-                    child: Container(width: 320, height: 320, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _lilac.withOpacity(.07)))),
-                  )),
-                ),
-              ]),
-            ),
-          ),
-        ),
-        const Positioned(left: 0, right: 0, bottom: 0, height: 80, child: DecoratedBox(decoration: BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [_bg, Color(0x0007000F)]),
-        ))),
-        Positioned(
-          right: 14, bottom: 12,
-          child: _Pressable(
-            onTap: () => _toast('Şəkil yüklə'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-              decoration: BoxDecoration(color: Colors.black.withOpacity(.55), borderRadius: BorderRadius.circular(20), border: Border.all(color: _lilac.withOpacity(.2))),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.upload_rounded, size: 13, color: Colors.white.withOpacity(.6)),
-                const SizedBox(width: 5),
-                Text('Şəkil yüklə', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(.6))),
-              ]),
-            ),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  /* ─── Avatar, ad, ID, bio, məlumatlar ─── */
-  Widget _info() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _Entrance(child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            ValueListenableBuilder<String?>(valueListenable: activeFrame, builder: (_, frame, __) => _Pressable(
-              onTap: () => _toast('Avatar'),
-              child: _Framed(frame: frame, size: 82, child: SizedBox(
-                width: 82, height: 82,
-                child: Stack(children: [
-                  AnimatedBuilder(
-                    animation: Listenable.merge([_ring, _glow]),
-                    builder: (_, __) => Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: SweepGradient(
-                          transform: GradientRotation(_ring.value * 2 * math.pi),
-                          colors: const [Color(0xFFFFD700), Color(0xFFFF8C00), _lilac, _purple, Color(0xFFFFD700)],
-                        ),
-                        boxShadow: [BoxShadow(color: _purple.withOpacity(.3 + .35 * _glow.value), blurRadius: 18 + 16 * _glow.value)],
-                      ),
-                    ),
-                  ),
-                  Positioned.fill(child: Padding(
-                    padding: const EdgeInsets.all(2.5),
-                    child: Container(
-                      decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A0035)),
-                      alignment: Alignment.center,
-                      child: Text(_p.name.isNotEmpty ? _p.name[0].toUpperCase() : 'İ', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
-                    ),
-                  )),
-                  Positioned(right: 2, bottom: 2, child: Container(
-                    width: 15, height: 15,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF00FF88), border: Border.all(color: _bg, width: 2.5)),
-                  )),
-                ]),
-              )),
-            )),
-            const SizedBox(width: 14),
-            Expanded(child: Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(_p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: _copyId,
-                  child: Row(children: [
-                    Text('ID: ${widget.userId}', style: TextStyle(fontSize: 12, color: const Color(0xFFE9E2FF).withOpacity(.55))),
-                    const SizedBox(width: 5),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (c, a) => ScaleTransition(scale: CurvedAnimation(parent: a, curve: Curves.elasticOut), child: c),
-                      child: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded, key: ValueKey(_copied), size: 13,
-                          color: _copied ? const Color(0xFF50C050) : const Color(0x80D2C3FA)),
-                    ),
-                  ]),
-                ),
-              ]),
-            )),
-          ])),
-          const SizedBox(height: 14),
-          if (_p.bio.isNotEmpty)
-            _Entrance(delay: 60, child: Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Text(_p.bio, style: TextStyle(fontSize: 13, height: 1.5, color: const Color(0xFFE9E2FF).withOpacity(.65))),
-            )),
-          _Entrance(delay: 100, child: Wrap(spacing: 6, runSpacing: 6, children: [
-            _Pill(leading: Text(_p.flag, style: const TextStyle(fontSize: 13)), text: _p.country),
-            _Pill(leading: const Icon(Icons.location_on_outlined, size: 12, color: Color(0x66D2C3FA)), text: _p.city),
-            _Pill(leading: const Icon(Icons.calendar_today_outlined, size: 11, color: Color(0x66D2C3FA)), text: '${_p.age} yaş'),
-            _Pill(leading: const Icon(Icons.schedule_rounded, size: 12, color: Color(0x66D2C3FA)), text: '${widget.days} gün'),
-          ])),
-        ]),
       );
+}
 
-  /* ─── VIP rozeti + admin ünvanı ─── */
-  Widget _vipRow() => Padding(
-        padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
-        child: Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 148, height: 54,
-              child: Stack(children: [
-                Positioned.fill(child: Image.network('$_img/viparxaplan.PNG', fit: BoxFit.cover, alignment: Alignment.centerLeft,
-                    errorBuilder: (_, __, ___) => Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF2A1150), Color(0xFF4A2280)]))))),
-                Positioned(left: 6, top: 6, bottom: 6, child: Image.network('$_img/VIP${widget.vip}.png', width: 42, fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const SizedBox(width: 42))),
-                Positioned(left: 54, top: 0, bottom: 0, child: Center(child: Text('VIP ${widget.vip}',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFFFFD700), shadows: [Shadow(color: Color(0x59A06EF5), blurRadius: 4)])))),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(height: 62, child: Image.network('$_img/adminunvan.gif', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const SizedBox())),
-        ]),
-      );
-
-  /* ─── Menyu ─── */
-  Widget _menu() {
-    final sections = [
-      ('Hesab və status', [
-        _Item(Icons.account_balance_wallet_outlined, const Color(0xFF34C759), 'Cüzdanım', 'Balans və ödənişlər'),
-        _Item(Icons.shield_outlined, const Color(0xFFFF9F0A), 'VIP', 'Üstünlüklər və səviyyələr', badge: 'VIP ${widget.vip}', badgeVip: true),
-        _Item(Icons.emoji_events_outlined, const Color(0xFF0A84FF), 'Reytinq', 'Ümumi sıralamadakı yerin', badge: '#142'),
-      ]),
-      ('Mağaza və bonuslar', [
-        _Item(Icons.shopping_bag_outlined, const Color(0xFFAF52DE), 'Mağaza', 'Çərçivələr və bəzəklər'),
-        _Item(Icons.card_giftcard_rounded, const Color(0xFFFF375F), 'Gündəlik bonus', 'Bugünkü hədiyyəni götür'),
-      ]),
-      ('Dəstək', [
-        _Item(Icons.chat_bubble_outline_rounded, const Color(0xFF32ADE6), 'Kömək mərkəzi', 'Suallar və dəstək'),
-        _Item(Icons.settings_outlined, const Color(0xFF8E8E93), 'Parametrlər', 'Hesab və məxfilik'),
-      ]),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const _Entrance(delay: 180, child: Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 12),
-          child: Text('Hesabım', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-        )),
-        for (final (si, s) in sections.indexed)
-          _Entrance(
-            delay: 220 + si * 90,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 18),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 7),
-                  child: Text(s.$1.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFE9E2FF).withOpacity(.46))),
+class _MenuRow extends StatelessWidget {
+  final _Item item;
+  const _MenuRow({required this.item});
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: () { HapticFeedback.selectionClick(); item.onTap(); },
+        splashColor: const Color(0x2E7B2FF7),
+        highlightColor: const Color(0x147B2FF7),
+        child: SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              Ico(item.icon, size: 36),
+              const SizedBox(width: 14),
+              Text(item.label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: kInk)),
+              Expanded(child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 8),
+                  child: item.right ?? (item.text == null ? const SizedBox() : Text(item.text!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 13, color: item.color))),
                 ),
-                Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.045),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0x1A965AF0)),
-                    boxShadow: const [BoxShadow(color: Color(0x59000000), blurRadius: 16, offset: Offset(0, 4))],
-                  ),
-                  child: Column(children: [
-                    for (final (i, it) in s.$2.indexed) ...[
-                      if (i > 0) Container(height: 1, color: const Color(0x13965AF0)),
-                      _MenuRow(item: it, onTap: () {
-                        if (it.label == 'Cüzdanım') { Navigator.of(context).push(_slide(const WalletScreen())); }
-                        else if (it.label == 'VIP') { Navigator.of(context).push(_slide(VipScreen(name: _p.name))); }
-                        else if (it.label == 'Mağaza') { Navigator.of(context).push(_slide(StoreScreen(name: _p.name))).then((_) => setState(() {})); }
-                        else { _toast(it.label); }
-                      }),
-                    ],
-                  ]),
-                ),
-              ]),
-            ),
-          ),
-      ]),
-    );
-  }
-
-  Widget _logout() => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
-        child: _Pressable(
-          onTap: () { HapticFeedback.mediumImpact(); Navigator.of(context).popUntil((r) => r.isFirst); appLogout?.call(); },
-          child: Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.045),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0x4D965AF0), width: .5),
-            ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.logout_rounded, size: 20, color: Color(0xFFFF5A7A)),
-              SizedBox(width: 8),
-              Text('Çıxış', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFFFF3B30))),
+              )),
+              const Ico('chev', size: 16, opacity: .4),
             ]),
           ),
         ),
       );
 }
 
-/* ─────────── Kiçik komponentlər ─────────── */
-class _Item {
-  final IconData icon;
-  final Color color;
-  final String label, desc;
-  final String? badge;
-  final bool badgeVip;
-  _Item(this.icon, this.color, this.label, this.desc, {this.badge, this.badgeVip = false});
-}
-
-class _MenuRow extends StatefulWidget {
-  final _Item item;
+/// Basanda yumşaq kiçilən düymə
+class _Tap extends StatefulWidget {
   final VoidCallback onTap;
-  const _MenuRow({required this.item, required this.onTap});
-  @override
-  State<_MenuRow> createState() => _MenuRowState();
-}
-
-class _MenuRowState extends State<_MenuRow> {
-  bool _down = false;
-  @override
-  Widget build(BuildContext context) {
-    final it = widget.item;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () { HapticFeedback.selectionClick(); widget.onTap(); },
-        onHighlightChanged: (v) => setState(() => _down = v),
-        splashColor: _purple.withOpacity(.18),
-        highlightColor: _purple.withOpacity(.08),
-        child: AnimatedScale(
-          scale: _down ? .98 : 1,
-          duration: Duration(milliseconds: _down ? 90 : 320),
-          curve: _down ? Curves.easeOut : Curves.elasticOut,
-          child: SizedBox(
-            height: 66,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(children: [
-                Container(
-                  width: 34, height: 34,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [it.color.withOpacity(.33), it.color.withOpacity(.08)]),
-                    border: Border.all(color: it.color.withOpacity(.33)),
-                  ),
-                  child: Icon(it.icon, size: 19, color: it.color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(it.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(it.desc, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: const Color(0xFFE9E2FF).withOpacity(.48))),
-                ])),
-                if (it.badge != null)
-                  Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: it.badgeVip ? const Color(0xFFFFF6D8) : const Color(0xFFEAF7FB),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(it.badge!, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: it.badgeVip ? const Color(0xFF8C6600) : const Color(0xFF17718B))),
-                  ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: const Color(0xFF965AF0).withOpacity(.4)),
-              ]),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  final Widget leading;
-  final String text;
-  const _Pill({required this.leading, required this.text});
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: const Color(0x14A06EF5), borderRadius: BorderRadius.circular(8)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          leading,
-          const SizedBox(width: 4),
-          Text(text, style: TextStyle(fontSize: 11, color: const Color(0xFFE9E2FF).withOpacity(.65))),
-        ]),
-      );
-}
-
-class _NavIcon extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _NavIcon({required this.icon, required this.onTap});
-  @override
-  Widget build(BuildContext context) => _Pressable(
-        onTap: () { HapticFeedback.selectionClick(); onTap(); },
-        child: SizedBox(
-          width: 44, height: 44,
-          child: Icon(icon, size: 23, color: Colors.white, shadows: const [Shadow(color: Color(0x80000000), blurRadius: 4)]),
-        ),
-      );
-}
-
-class _Glow extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _Glow({required this.size, required this.color});
-  @override
-  Widget build(BuildContext context) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [color, color.withOpacity(0)])),
-      );
-}
-
-class _Entrance extends StatelessWidget {
   final Widget child;
-  final int delay;
-  const _Entrance({required this.child, this.delay = 0});
+  const _Tap({required this.onTap, required this.child});
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: Duration(milliseconds: 520 + delay),
-        curve: Interval(delay / (520 + delay), 1, curve: Curves.easeOutCubic),
-        builder: (_, t, c) => Opacity(opacity: t, child: Transform.translate(offset: Offset(0, 18 * (1 - t)), child: c)),
-        child: child,
-      );
+  State<_Tap> createState() => _TapState();
 }
 
-class _Pressable extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-  const _Pressable({required this.child, required this.onTap});
-  @override
-  State<_Pressable> createState() => _PressableState();
-}
-
-class _PressableState extends State<_Pressable> {
-  bool _down = false;
+class _TapState extends State<_Tap> {
+  bool _d = false;
   @override
   Widget build(BuildContext context) => GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _down = true),
-        onTapUp: (_) => setState(() => _down = false),
-        onTapCancel: () => setState(() => _down = false),
-        onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _down ? .9 : 1,
-          duration: Duration(milliseconds: _down ? 90 : 380),
-          curve: _down ? Curves.easeOut : Curves.elasticOut,
-          child: widget.child,
-        ),
+        onTapDown: (_) => setState(() => _d = true),
+        onTapCancel: () => setState(() => _d = false),
+        onTapUp: (_) { setState(() => _d = false); HapticFeedback.selectionClick(); widget.onTap(); },
+        child: AnimatedScale(scale: _d ? .88 : 1, duration: const Duration(milliseconds: 120), child: widget.child),
       );
 }
 
-
-/* ═══════════════ ÇƏRÇİVƏLİ AVATAR ═══════════════ */
-class _Framed extends StatelessWidget {
-  final String? frame;
-  final double size;
-  final Widget child;
-  const _Framed({required this.frame, required this.size, required this.child});
-  @override
-  Widget build(BuildContext context) {
-    if (frame == null) return child;
-    final f = kFrames.firstWhere((x) => x.$1 == frame, orElse: () => kFrames.first);
-    final outer = size * 1.5;
-    return SizedBox(
-      width: outer, height: outer,
-      child: Stack(alignment: Alignment.center, children: [
-        Transform.scale(scale: .95, child: child),
-        IgnorePointer(child: Image.network('$_img/${f.$3}.gif', width: outer, height: outer, fit: BoxFit.contain, gaplessPlayback: true,
-            errorBuilder: (_, __, ___) => const SizedBox())),
-      ]),
-    );
-  }
-}
-
-/* ═══════════════ ÜMUMİ BAŞLIQ ═══════════════ */
-class _Header extends StatelessWidget {
-  final String title;
-  final List<Widget> actions;
-  final bool center;
-  const _Header({required this.title, this.actions = const [], this.center = true});
-  @override
-  Widget build(BuildContext context) => ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            padding: EdgeInsets.fromLTRB(6, MediaQuery.of(context).padding.top + 2, 8, 4),
-            decoration: BoxDecoration(color: const Color(0xCC0D001E), border: Border(bottom: BorderSide(color: Colors.white.withOpacity(.08), width: .5))),
-            child: SizedBox(
-              height: 48,
-              child: Stack(alignment: Alignment.center, children: [
-                if (center) Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                Row(children: [
-                  _NavIcon(icon: Icons.arrow_back_ios_new_rounded, onTap: () => Navigator.maybePop(context)),
-                  if (!center) Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                  const Spacer(),
-                  ...actions,
-                ]),
-              ]),
-            ),
-          ),
-        ),
+/// Yuxarı işıqlanma (blur yoxdur, yalnız ucuz gradient)
+class _Aurora extends StatelessWidget {
+  final Animation<double> ctrl;
+  const _Aurora({required this.ctrl});
+  Widget _blob(double w, double h, Color c) => Container(
+        width: w, height: h,
+        decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [c, c.withAlpha(0)])),
       );
-}
-
-String _fmtN(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
-
-/* ═══════════════ CÜZDANIM ═══════════════ */
-class WalletScreen extends StatelessWidget {
-  const WalletScreen({super.key});
-  static const _packs = [
-    (1, 18546, 2781, 110, '0.80'),
-    (2, 93500, 14025, 510, '4.80'),
-    (3, 222460, 33369, 1100, '9.99'),
-    (4, 410888, 61633, 1899, '19.50'),
-    (5, 980245, 147036, 5000, '56.99'),
-    (6, 2156789, 323518, 9999, '110.99'),
-  ];
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Stack(children: [
-        const Positioned(top: -80, right: -60, child: _Glow(size: 300, color: Color(0x557B2FF7))),
-        const Positioned(bottom: -100, left: -80, child: _Glow(size: 280, color: Color(0x33FF3EA5))),
-        ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 70, 16, 30),
-          children: [
-            // Balans
-            _Entrance(child: ValueListenableBuilder<int>(valueListenable: jetonBalance, builder: (_, bal, __) => Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(colors: [Color(0xFF3C1A6E), Color(0xFF1A0A35)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                border: Border.all(color: const Color(0x33FFD700)),
-                boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 18, offset: Offset(0, 6))],
-              ),
-              child: Row(children: [
-                Image.network('$_img/jeton.PNG', width: 40, height: 40, errorBuilder: (_, __, ___) => const Icon(Icons.monetization_on_rounded, size: 40, color: Color(0xFFFFD700))),
-                const SizedBox(width: 12),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Cari balans', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.6))),
-                  const SizedBox(height: 2),
-                  Text(_fmtN(bal), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFFFFD700))),
-                ]),
-              ]),
-            ))),
-            const SizedBox(height: 12),
-            // VIP kartı
-            _Entrance(delay: 60, child: _Pressable(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x33965AF0))),
-                child: Row(children: [
-                  Image.network('$_img/VIP0.png', width: 44, height: 44, errorBuilder: (_, __, ___) => const Icon(Icons.shield_rounded, size: 40, color: _lilac)),
-                  const SizedBox(width: 12),
-                  const Expanded(child: Text('Səviyyə keçmək üçün EXP lazımdır.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
-                  Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(.35)),
-                ]),
-              ),
-            )),
-            const SizedBox(height: 16),
-            // Paketlər
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _packs.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: .52),
-              itemBuilder: (_, i) {
-                final p = _packs[i];
-                return _Entrance(delay: 120 + i * 50, child: _Pressable(
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    jetonBalance.value += p.$2 + p.$3;
-                    ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(
-                      content: const Text('Ödəniş xidməti hələ qoşulmayıb', textAlign: TextAlign.center),
-                      behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF241F2E),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), margin: const EdgeInsets.fromLTRB(30, 0, 30, 24),
-                    ));
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.05),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0x33965AF0)),
-                    ),
-                    child: Column(children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 3),
-                        decoration: BoxDecoration(color: const Color(0x2622C55E), borderRadius: BorderRadius.circular(8)),
-                        child: const Text('15% tokenin geri qaytarılması', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF5DDB8A), height: 1.2)),
-                      ),
-                      Expanded(child: Image.network('$_img/v${p.$1}.PNG', fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.monetization_on_rounded, size: 48, color: Color(0xFFFFD700)))),
-                      Text(_fmtN(p.$2), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                      Text('+${_fmtN(p.$3)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFFF4D6A))),
-                      Text('${p.$4} VİP EXP', style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(.5))),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 32, width: double.infinity, alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(colors: [_purple, Color(0xFF9D5CFF)]),
-                          boxShadow: [BoxShadow(color: _purple.withOpacity(.35), blurRadius: 10, offset: const Offset(0, 3))],
-                        ),
-                        child: Text('USD ${p.$5}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                      ),
-                    ]),
-                  ),
-                ));
-              },
-            ),
-            const SizedBox(height: 18),
-            Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text('Bu sifarişi təqdim etməklə, siz ', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.45))),
-              GestureDetector(onTap: () => Navigator.of(context).push(_slide(const _LegalPage(title: 'Xidmət Şərtləri'))),
-                  child: const Text('"Xidmət Şərtləri"', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _lilac))),
-              Text(' və ', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.45))),
-              GestureDetector(onTap: () => Navigator.of(context).push(_slide(const _LegalPage(title: 'Məxfilik Siyasəti'))),
-                  child: const Text('"Məxfilik Siyasəti"', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _lilac))),
-              Text(' ilə razılaşırsınız.', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.45))),
-            ]),
-          ],
+  Widget build(BuildContext context) => Stack(clipBehavior: Clip.hardEdge, children: [
+        AnimatedBuilder(
+          animation: ctrl,
+          builder: (_, __) {
+            final t = Curves.easeInOut.transform(ctrl.value);
+            return Stack(children: [
+              Positioned(left: -60 + 30 * t, top: -80 + 26 * t, child: Transform.scale(scale: 1 + .2 * t, child: _blob(320, 280, kPurple.withAlpha(150)))),
+              Positioned(right: -50 - 30 * t, top: -60 + 20 * t, child: Transform.scale(scale: 1 + .15 * t, child: _blob(280, 260, kPink.withAlpha(110)))),
+              Positioned(left: 90 - 40 * t, top: 10 + 24 * t, child: _blob(260, 210, kTeal.withAlpha(70))),
+            ]);
+          },
         ),
-        Positioned(top: 0, left: 0, right: 0, child: _Header(title: 'Cüzdanım', actions: [
-          _NavIcon(icon: Icons.headset_mic_outlined, onTap: () {}),
-          _NavIcon(icon: Icons.history_rounded, onTap: () {}),
-        ])),
-      ]),
-    );
-  }
+        const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x0007000F), kBg], stops: [.35, 1]),
+        ))),
+      ]);
 }
 
-class _LegalPage extends StatelessWidget {
-  final String title;
-  const _LegalPage({required this.title});
+/* ═════════════════ ZİYARƏTÇİ PROFİLİ ═════════════════ */
+class PublicProfileScreen extends StatefulWidget {
+  const PublicProfileScreen({super.key});
   @override
-  Widget build(BuildContext context) {
-    final data = title == 'Xidmət Şərtləri' ? kTerms : kPrivacy;
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Column(children: [
-        _Header(title: title),
-        Expanded(child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
-          children: [
-            Text('Velvet $title', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('Son yenilənmə: 28 sentyabr 2026', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.45))),
-            const SizedBox(height: 18),
-            for (final sec in data) ...[
-              Text(sec.$1, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              for (final p in sec.$2)
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8, left: p.startsWith('•') ? 8 : 0),
-                  child: Text(p, style: TextStyle(fontSize: 14, height: 1.6, color: Colors.white.withOpacity(.78),
-                      fontWeight: RegExp(r'^[a-c]\)').hasMatch(p) ? FontWeight.w700 : FontWeight.w400)),
-                ),
-              const SizedBox(height: 12),
-            ],
-          ],
-        )),
-      ]),
-    );
-  }
+  State<PublicProfileScreen> createState() => _PublicProfileScreenState();
 }
 
-/* ═══════════════ PROFİLİ DÜZƏLT ═══════════════ */
-class _ProfileData {
-  String name, bio, country, flag, city;
-  int age;
-  String gender = 'Kişi';
-  _ProfileData(this.name, this.bio, this.country, this.flag, this.city, this.age);
-}
-
-const _countries = {
-  'Azərbaycan': ('🇦🇿', ['Bakı', 'Gəncə', 'Sumqayıt', 'Mingəçevir', 'Naxçıvan', 'Lənkəran', 'Şəki', 'Quba', 'Şamaxı', 'Qəbələ', 'Şuşa']),
-  'Türkiyə': ('🇹🇷', ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Trabzon']),
-  'Rusiya': ('🇷🇺', ['Moskva', 'Sankt-Peterburq', 'Kazan', 'Novosibirsk', 'Yekaterinburq']),
-  'Gürcüstan': ('🇬🇪', ['Tbilisi', 'Kutaisi', 'Batumi', 'Rustavi']),
-  'Almaniya': ('🇩🇪', ['Berlin', 'Hamburq', 'Münhen', 'Köln', 'Frankfurt']),
-  'ABŞ': ('🇺🇸', ['Nyu-York', 'Los-Anceles', 'Çikaqo', 'Hyuston']),
-  'Ukrayna': ('🇺🇦', ['Kiyev', 'Xarkov', 'Odessa', 'Lvov']),
-  'Qazaxıstan': ('🇰🇿', ['Almatı', 'Astana', 'Şymkent']),
-  'Özbəkistan': ('🇺🇿', ['Daşkənd', 'Samarqənd', 'Buxara']),
-  'İngiltərə': ('🇬🇧', ['London', 'Mançester', 'Liverpool']),
-};
-
-class _EditProfile extends StatefulWidget {
-  final _ProfileData data;
-  const _EditProfile({required this.data});
-  @override
-  State<_EditProfile> createState() => _EditProfileState();
-}
-
-class _EditProfileState extends State<_EditProfile> {
-  late final _name = TextEditingController(text: widget.data.name);
-  late final _bio = TextEditingController(text: widget.data.bio);
-  late String _country = _countries.containsKey(widget.data.country) ? widget.data.country : 'Azərbaycan';
-  late String _city = widget.data.city;
-  late int _age = widget.data.age;
-  late String _gender = widget.data.gender;
+class _PublicProfileScreenState extends State<PublicProfileScreen> with TickerProviderStateMixin {
+  late final _ring = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
+  late final _bob = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..repeat(reverse: true);
+  late final _star = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+  final _copied = ValueNotifier<bool>(false);
 
   @override
-  void dispose() { _name.dispose(); _bio.dispose(); super.dispose(); }
+  void dispose() { _ring.dispose(); _bob.dispose(); _star.dispose(); _copied.dispose(); super.dispose(); }
 
-  void _save() {
-    final d = widget.data;
-    d.name = _name.text.trim().isEmpty ? d.name : _name.text.trim();
-    d.bio = _bio.text.trim();
-    d.country = _country;
-    d.flag = _countries[_country]!.$1;
-    d.city = _city;
-    d.age = _age;
-    d.gender = _gender;
-    HapticFeedback.mediumImpact();
-    Navigator.pop(context);
-  }
-
-  Widget _row(IconData icon, String label, Widget right) => Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x1AA06EF5))),
-        child: Row(children: [
-          Icon(icon, size: 18, color: Colors.white.withOpacity(.65)),
-          const SizedBox(width: 12),
-          SizedBox(width: 96, child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-          Expanded(child: Align(alignment: Alignment.centerRight, child: right)),
-        ]),
-      );
-
-  Widget _dropdown(String value, List<String> items, ValueChanged<String> onChanged) => DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: items.contains(value) ? value : items.first,
-          dropdownColor: const Color(0xFF1A0035),
-          borderRadius: BorderRadius.circular(12),
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
-          iconEnabledColor: _lilac,
-          items: [for (final i in items) DropdownMenuItem(value: i, child: Text(i))],
-          onChanged: (v) { if (v != null) onChanged(v); },
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final cities = _countries[_country]!.$2;
-    return Scaffold(
-      backgroundColor: _bg,
-      body: Column(children: [
-        _Header(title: 'Profili Düzəlt', actions: [
-          _Pressable(onTap: _save, child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: const LinearGradient(colors: [_purple, _pink])),
-            child: const Text('Saxla', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          )),
-        ]),
-        Expanded(child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.only(top: 16, bottom: 40),
-          children: [
-            _row(Icons.person_outline_rounded, 'İstifadəçi adı', TextField(
-              controller: _name, textAlign: TextAlign.right, cursorColor: _lilac,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              decoration: const InputDecoration(isCollapsed: true, border: InputBorder.none, hintText: 'Ad daxil edin'),
-            )),
-            _row(Icons.wc_rounded, 'Cins', Wrap(spacing: 6, children: [
-              for (final g in ['Kişi', 'Qadın', 'Digər'])
-                _Pressable(onTap: () => setState(() => _gender = g), child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(9),
-                      color: _gender == g ? _purple.withOpacity(.25) : Colors.transparent,
-                      border: Border.all(color: _gender == g ? _purple : const Color(0x24A06EF5))),
-                  child: Text(g, style: TextStyle(fontSize: 12, color: _gender == g ? _lilac : Colors.white54)),
-                )),
-            ])),
-            _row(Icons.cake_outlined, 'Yaş', Row(mainAxisSize: MainAxisSize.min, children: [
-              _step(Icons.remove_rounded, () => setState(() => _age = math.max(18, _age - 1))),
-              SizedBox(width: 40, child: Text('$_age', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-              _step(Icons.add_rounded, () => setState(() => _age = math.min(99, _age + 1))),
-            ])),
-            _row(Icons.public_rounded, 'Ölkə', _dropdown(_country, _countries.keys.toList(), (v) => setState(() { _country = v; _city = _countries[v]!.$2.first; }))),
-            _row(Icons.location_on_outlined, 'Bölgə', _dropdown(_city, cities, (v) => setState(() => _city = v))),
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x1AA06EF5))),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [Icon(Icons.notes_rounded, size: 18, color: Colors.white.withOpacity(.65)), const SizedBox(width: 10), const Text('Haqqında', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))]),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _bio, maxLines: 3, cursorColor: _lilac, style: const TextStyle(fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Özün haqqında yaz...', filled: true, fillColor: const Color(0x12A06EF5),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-              ]),
-            ),
-          ],
-        )),
-      ]),
-    );
-  }
-
-  Widget _step(IconData i, VoidCallback onTap) => _Pressable(onTap: onTap, child: Container(
-        width: 30, height: 30,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), color: const Color(0x14A06EF5), border: Border.all(color: const Color(0x26A06EF5))),
-        child: Icon(i, size: 16),
+  Widget _bigV({required Paint? stroke, Color? color}) => Text('V', style: TextStyle(
+        fontSize: 200, height: 1, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic, color: stroke == null ? color : null, foreground: stroke,
       ));
-}
-
-/* ═══════════════ DEKORASİYA MAĞAZASI ═══════════════ */
-class StoreScreen extends StatefulWidget {
-  final String name;
-  const StoreScreen({super.key, required this.name});
-  @override
-  State<StoreScreen> createState() => _StoreScreenState();
-}
-
-class _StoreScreenState extends State<StoreScreen> {
-  int _tab = 0;
-  static const _prices = {3: 100, 7: 200, 30: 500};
-
-  void _openFrame((String, String, String, Color) f) {
-    HapticFeedback.selectionClick();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      barrierColor: Colors.black.withOpacity(.5),
-      builder: (_) => _FrameSheet(frame: f, name: widget.name, prices: _prices),
-    ).then((_) => setState(() {}));
-  }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
+    final outline = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0xFF8448E8);
+    final shadow = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0x66501AAA);
     return Scaffold(
-      backgroundColor: _bg,
-      body: Column(children: [
-        ClipRect(child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            color: const Color(0xCC0D001E),
-            padding: EdgeInsets.fromLTRB(6, top + 2, 12, 0),
-            child: Column(children: [
-              SizedBox(height: 48, child: Row(children: [
-                _NavIcon(icon: Icons.arrow_back_ios_new_rounded, onTap: () => Navigator.maybePop(context)),
-                const Text('Dekorasiya Mağazası', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                const Spacer(),
-                _Pressable(onTap: () {}, child: Container(
-                  height: 32, padding: const EdgeInsets.only(left: 9, right: 12),
-                  decoration: BoxDecoration(color: const Color(0xFFE0102D), borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [BoxShadow(color: Color(0x4DE0102D), blurRadius: 8, offset: Offset(0, 2))]),
-                  child: const Row(children: [Icon(Icons.person_outline_rounded, size: 16), SizedBox(width: 4), Text('Mənim', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))]),
-                )),
-              ])),
-              Row(children: [
-                for (final (i, t) in ['Çərçivələr', 'Giriş Animasiyası'].indexed)
-                  GestureDetector(
-                    onTap: () { HapticFeedback.selectionClick(); setState(() => _tab = i); },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.only(left: 10, right: 12),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: _tab == i ? Colors.white : Colors.transparent, width: 2))),
-                      child: Text(t, style: TextStyle(fontSize: 15, fontWeight: _tab == i ? FontWeight.w600 : FontWeight.w300, color: _tab == i ? Colors.white : Colors.white54)),
-                    ),
-                  ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Stack(fit: StackFit.passthrough, children: [
+          // Üz qabığı
+          RepaintBoundary(
+            child: SizedBox(
+              height: 330,
+              child: Stack(alignment: Alignment.center, children: [
+                const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+                  gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF6F3DF0), Color(0xFFA566F8), Color(0xFFD08CFF)], stops: [0, .62, 1]),
+                ))),
+                AnimatedBuilder(
+                  animation: _bob,
+                  child: Stack(alignment: Alignment.center, children: [
+                    Transform.translate(offset: const Offset(0, 10), child: _bigV(stroke: shadow)),
+                    _bigV(stroke: outline),
+                    _bigV(stroke: null, color: Colors.white),
+                  ]),
+                  builder: (_, c) => Transform.translate(offset: Offset(0, -8 * Curves.easeInOut.transform(_bob.value)), child: c),
+                ),
+                Positioned.fill(child: CustomPaint(painter: _SparklePainter(_star))),
+                Positioned(bottom: 44, child: Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white))),
               ]),
-            ]),
-          ),
-        )),
-        Expanded(child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: _tab == 0 ? _frames() : _entrance(),
-        )),
-        // Balans paneli
-        ValueListenableBuilder<int>(valueListenable: jetonBalance, builder: (_, bal, __) => Container(
-          padding: EdgeInsets.fromLTRB(18, 12, 18, math.max(16, MediaQuery.of(context).padding.bottom)),
-          decoration: BoxDecoration(color: const Color(0x26A06EF5), border: Border(top: BorderSide(color: Colors.white.withOpacity(.06)))),
-          child: Row(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('CARİ JETONUM', style: TextStyle(fontSize: 10, letterSpacing: 2, color: Colors.white.withOpacity(.4))),
-              const SizedBox(height: 4),
-              Row(children: [
-                Image.network('$_img/jeton.PNG', width: 22, height: 22, errorBuilder: (_, __, ___) => const Icon(Icons.monetization_on_rounded, size: 22, color: Color(0xFFFFD700))),
-                const SizedBox(width: 7),
-                Text(_fmtN(bal), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFFFFD700))),
-              ]),
-            ]),
-            const Spacer(),
-            _Pressable(
-              onTap: () => Navigator.of(context).push(_slide(const WalletScreen())),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9500)]),
-                    boxShadow: const [BoxShadow(color: Color(0x4DFF9600), blurRadius: 16, offset: Offset(0, 4))]),
-                child: const Text('+ Yüklə', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF2A0E00))),
-              ),
             ),
-          ]),
-        )),
-      ]),
+          ),
+          Positioned(top: top + 12, left: 14, child: _Tap(onTap: () => Navigator.of(context).maybePop(), child: const Ico('back', size: 30))),
+          Positioned(top: top + 12, right: 14, child: _Tap(onTap: () => velvetToast(context, 'Profili redaktə et'), child: const Ico('edit', size: 30))),
+          // Alt vərəq
+          Padding(padding: const EdgeInsets.only(top: 296), child: _sheet()),
+        ]),
+      ),
     );
   }
 
-  Widget _frames() => GridView.builder(
-        key: const ValueKey('frames'),
-        padding: const EdgeInsets.all(14),
-        physics: const BouncingScrollPhysics(),
-        itemCount: kFrames.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: .8),
-        itemBuilder: (_, i) {
-          final f = kFrames[i];
-          final active = activeFrame.value == f.$1;
-          return _Entrance(delay: i * 40, child: _Pressable(
-            onTap: () => _openFrame(f),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: active ? f.$4.withOpacity(.08) : Colors.white.withOpacity(.03),
-                border: Border.all(color: active ? f.$4 : const Color(0x1AA06EF5), width: 1.5),
-                boxShadow: active ? [BoxShadow(color: f.$4.withOpacity(.4), blurRadius: 18)] : [],
-              ),
-              child: Column(children: [
-                Expanded(child: Stack(alignment: Alignment.center, children: [
-                  FractionallySizedBox(widthFactor: .62, heightFactor: .62, child: Container(
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF1A0035), border: Border.all(color: Colors.white, width: 1.5)),
-                    alignment: Alignment.center,
-                    child: Text(widget.name[0].toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-                  )),
-                  Image.network('$_img/${f.$3}.gif', fit: BoxFit.contain, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox()),
-                  if (active) Positioned(top: 6, right: 6, child: Container(
-                    width: 18, height: 18, decoration: BoxDecoration(color: f.$4, shape: BoxShape.circle),
-                    child: const Icon(Icons.check_rounded, size: 12, color: Colors.black),
-                  )),
-                ])),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Image.network('$_img/jeton.PNG', width: 12, height: 12, errorBuilder: (_, __, ___) => const SizedBox()),
-                    const SizedBox(width: 4),
-                    Text(active ? 'Aktiv' : '${_prices[7]}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: active ? f.$4 : const Color(0xFFFFD700))),
-                  ]),
-                ),
-              ]),
-            ),
-          ));
-        },
-      );
-
-  Widget _entrance() => ListView(
-        key: const ValueKey('entrance'),
-        padding: const EdgeInsets.all(16),
-        children: [
-          _Entrance(child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(color: const Color(0x0FA06EF5), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0x1AA06EF5))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              AspectRatio(aspectRatio: 16 / 9, child: Container(
-                decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF2A0060), Color(0xFF0D001E)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-                alignment: Alignment.center,
-                child: Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: _purple.withOpacity(.8), boxShadow: [BoxShadow(color: _purple.withOpacity(.6), blurRadius: 24)]),
-                  child: const Icon(Icons.directions_car_rounded, size: 28),
-                ),
-              )),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Maşın Giriş Animasiyası v1', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text('Otağa girəndə xüsusi giriş animasiyası', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.6))),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Image.network('$_img/jeton.PNG', width: 14, height: 14, errorBuilder: (_, __, ___) => const SizedBox()),
-                    const SizedBox(width: 6),
-                    const Text('800 / 30 gün', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFFFFD700))),
-                    const Spacer(),
-                    _Pressable(
-                      onTap: () {
-                        if (jetonBalance.value < 800) { _warn(); return; }
-                        jetonBalance.value -= 800;
-                        HapticFeedback.mediumImpact();
-                        _done('Giriş animasiyası aktivləşdi');
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: const LinearGradient(colors: [_purple, _lilac])),
-                        child: const Text('Aktivləşdir', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                  ]),
+  Widget _sheet() => Stack(clipBehavior: Clip.none, children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 44),
+          decoration: const BoxDecoration(
+            color: kBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+            boxShadow: [BoxShadow(color: Color(0x337B2FF7), blurRadius: 30, offset: Offset(0, -10))],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(height: 56, child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              const Text('Azərbaycan', style: TextStyle(fontSize: 15, color: kMut)),
+              const SizedBox(width: 10),
+              Container(width: 1, height: 16, color: const Color(0x26FFFFFF)),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () {
+                  Clipboard.setData(const ClipboardData(text: '48219037'));
+                  HapticFeedback.lightImpact();
+                  _copied.value = true;
+                  velvetToast(context, 'ID kopyalandı');
+                  Future.delayed(const Duration(milliseconds: 1500), () { if (mounted) _copied.value = false; });
+                },
+                child: Row(children: [
+                  const Text('ID:48219037', style: TextStyle(fontSize: 15, color: kMut)),
+                  const SizedBox(width: 5),
+                  ValueListenableBuilder<bool>(valueListenable: _copied, builder: (_, c, __) => Ico(c ? 'lv' : 'copy', size: 15)),
                 ]),
               ),
+            ])),
+            const SizedBox(height: 22),
+            const Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('Velvet istifadəçisi', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+              _Chip('age', '22', fg: Color(0xFFCFC6EA)),
+              _Chip('leaf', 'Yeni başlayan', grad: LinearGradient(colors: [Color(0xFF2FD84A), Color(0xFF8BE34A)])),
+              _Chip('lv', '1', grad: LinearGradient(colors: [Color(0xFF0FAE5F), Color(0xFF2BD6A0)])),
             ]),
-          )),
-        ],
-      );
-
-  void _warn() => ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(const SnackBar(
-        content: Text('Jeton kifayət etmir', textAlign: TextAlign.center),
-        behavior: SnackBarBehavior.floating, backgroundColor: Color(0xFFFF9500)));
-  void _done(String t) => ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(
-        content: Text(t, textAlign: TextAlign.center),
-        behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF241F2E)));
-}
-
-class _FrameSheet extends StatefulWidget {
-  final (String, String, String, Color) frame;
-  final String name;
-  final Map<int, int> prices;
-  const _FrameSheet({required this.frame, required this.name, required this.prices});
-  @override
-  State<_FrameSheet> createState() => _FrameSheetState();
-}
-
-class _FrameSheetState extends State<_FrameSheet> {
-  int _days = 7;
-  String? _err;
-  @override
-  Widget build(BuildContext context) {
-    final f = widget.frame;
-    final price = widget.prices[_days]!;
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, math.max(24, MediaQuery.of(context).padding.bottom + 12)),
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF130030), Color(0xFF09001A)]),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 12),
-        SizedBox(width: 180, height: 180, child: Stack(alignment: Alignment.center, children: [
-          Container(
-            width: 124, height: 124,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF1A0035)),
-            alignment: Alignment.center,
-            child: Text(widget.name[0].toUpperCase(), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900)),
-          ),
-          Image.network('$_img/${f.$3}.gif', width: 180, height: 180, fit: BoxFit.contain, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox()),
-        ])),
-        const SizedBox(height: 8),
-        Text('AVATAR ÇƏRÇİVƏSİ', style: TextStyle(fontSize: 11, letterSpacing: 3, color: Colors.white.withOpacity(.5))),
-        const SizedBox(height: 6),
-        Text(f.$2, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: f.$4, shadows: [Shadow(color: f.$4.withOpacity(.5), blurRadius: 12)])),
-        const SizedBox(height: 18),
-        Row(children: [
-          for (final d in [3, 7, 30])
-            Expanded(child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: _Pressable(
-                onTap: () { HapticFeedback.selectionClick(); setState(() => _days = d); },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: _days == d ? f.$4.withOpacity(.12) : const Color(0x0FA06EF5),
-                    border: Border.all(color: _days == d ? f.$4 : const Color(0x1AA06EF5), width: 1.5),
-                    boxShadow: _days == d ? [BoxShadow(color: f.$4.withOpacity(.35), blurRadius: 12)] : [],
-                  ),
-                  child: Column(children: [
-                    Text('$d', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _days == d ? f.$4 : Colors.white)),
-                    Text('GÜN', style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(.55))),
-                    const SizedBox(height: 6),
-                    Text('${widget.prices[d]}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _days == d ? const Color(0xFFFFD700) : const Color(0x99FFC800))),
-                  ]),
-                ),
-              ),
-            )),
-        ]),
-        const SizedBox(height: 18),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: _err == null ? const SizedBox(height: 0) : Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Text(_err!, style: const TextStyle(color: Color(0xFFFF9500), fontWeight: FontWeight.w700)),
-          ),
+            const SizedBox(height: 10),
+            const Text('1 İzlənilən · 0 İzləyici', style: TextStyle(fontSize: 17, color: kMut)),
+            const SizedBox(height: 34),
+            const Text('Nişanlarım', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 18),
+            Row(children: [
+              Expanded(child: _Honor('SVIP', 'Hələ əldə edilməyib', 'b1', const Color(0xFFFF8C50), isNew: true, bob: _bob, onTap: () => velvetToast(context, 'SVIP'))),
+              const SizedBox(width: 10),
+              Expanded(child: _Honor('VIP', 'Hələ əldə edilməyib', 'b2', const Color(0xFFFFBE46), isNew: true, bob: _bob, onTap: () => velvetToast(context, 'VIP'))),
+              const SizedBox(width: 10),
+              Expanded(child: _Honor('Ailə', 'Qoşulmayıb', 'family', const Color(0xFF5A8CFF), bob: _bob, onTap: () => velvetToast(context, 'Ailə'))),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _Honor('Avtomobil', 'Hələ əldə edilməyib', 'car', const Color(0xFF96A0FF), h: 84, iw: 54, ih: 40, bob: _bob, onTap: () => velvetToast(context, 'Avtomobil'))),
+              const SizedBox(width: 10),
+              Expanded(child: _Honor('Hədiyyə divarı', '0/450', 'gift', kLilac, h: 84, iw: 44, ih: 44, bob: _bob, onTap: () => velvetToast(context, 'Hədiyyə divarı'))),
+            ]),
+            _LineRow('Yaxın dost', 'dəvət et', () => velvetToast(context, 'Yaxın dost')),
+            _LineRow('Paylaşımlar', 'Möhtəşəm anlarını paylaş', () => velvetToast(context, 'Paylaşımlar')),
+            const SizedBox(height: 24),
+            const Text('Şəxsi məlumat', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            const _Info('cal', 'Velvet-də bu gün 3-cü gün'),
+            const _Info('pen', 'Heç bir məlumat qoyulmayıb~'),
+          ]),
         ),
-        _Pressable(
-          onTap: () {
-            if (jetonBalance.value < price) { HapticFeedback.vibrate(); setState(() => _err = 'Jeton kifayət etmir'); return; }
-            jetonBalance.value -= price;
-            activeFrame.value = f.$1;
-            HapticFeedback.heavyImpact();
-            Navigator.pop(context);
-          },
-          child: Container(
-            height: 52, width: double.infinity, alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(colors: [f.$4, f.$4.withOpacity(.7)]),
-              boxShadow: [BoxShadow(color: f.$4.withOpacity(.45), blurRadius: 24, offset: const Offset(0, 6))],
+        Positioned(left: 18, top: -58, child: _Avatar(size: 88, ring: _ring)),
+        Positioned(left: 14, top: 26, child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
+          decoration: BoxDecoration(color: const Color(0xFF1A1030), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0x4019D4B4))),
+          child: Row(mainAxisSize: MainAxisSize.min, children: const [
+            DecoratedBox(decoration: BoxDecoration(shape: BoxShape.circle, color: kTeal, boxShadow: [BoxShadow(color: kTeal, blurRadius: 8)]), child: SizedBox(width: 9, height: 9)),
+            SizedBox(width: 6),
+            Text('Onlayn', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kTeal)),
+          ]),
+        )),
+      ]);
+}
+
+class _Honor extends StatelessWidget {
+  final String title, sub, icon;
+  final Color tone;
+  final bool isNew;
+  final double h, iw, ih;
+  final Animation<double> bob;
+  final VoidCallback onTap;
+  const _Honor(this.title, this.sub, this.icon, this.tone, {this.isNew = false, this.h = 100, this.iw = 44, this.ih = 44, required this.bob, required this.onTap});
+  @override
+  Widget build(BuildContext context) => _Tap(
+        onTap: onTap,
+        child: Container(
+          height: h,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: tone.withAlpha(46)),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [tone.withAlpha(56), tone.withAlpha(14)]),
+          ),
+          child: Stack(children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                FractionallySizedBox(widthFactor: .66, child: Text(sub, style: const TextStyle(fontSize: 12.5, color: kMut))),
+              ]),
             ),
-            child: Text('Aktivləşdir — $price Jeton', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.black)),
-          ),
+            Positioned(right: 10, bottom: 10, child: AnimatedBuilder(
+              animation: bob,
+              child: Ico(icon, size: iw, height: ih),
+              builder: (_, c) => Transform.translate(offset: Offset(0, -3 * Curves.easeInOut.transform(bob.value)), child: c),
+            )),
+            if (isNew)
+              Positioned(top: 0, right: 0, child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(colors: [Color(0xFFFF6A5A), Color(0xFFFF3E7E)]),
+                  borderRadius: BorderRadius.only(topRight: Radius.circular(16), bottomLeft: Radius.circular(10)),
+                ),
+                child: const Text('YENİ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+              )),
+          ]),
         ),
-        const SizedBox(height: 10),
-        ValueListenableBuilder<int>(valueListenable: jetonBalance, builder: (_, b, __) =>
-            Text('Balans: ${_fmtN(b)} jeton', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(.5)))),
-      ]),
-    );
+      );
+}
+
+class _LineRow extends StatelessWidget {
+  final String title, hint;
+  final VoidCallback onTap;
+  const _LineRow(this.title, this.hint, this.onTap);
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () { HapticFeedback.selectionClick(); onTap(); },
+        child: SizedBox(
+          height: 62,
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+            Row(children: [
+              Text(hint, style: const TextStyle(fontSize: 15, color: kMut)),
+              const SizedBox(width: 4),
+              const Ico('chev', size: 15, opacity: .5),
+            ]),
+          ]),
+        ),
+      );
+}
+
+class _Info extends StatelessWidget {
+  final String icon, text;
+  const _Info(this.icon, this.text);
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Row(children: [Ico(icon, size: 30), const SizedBox(width: 14), Text(text, style: const TextStyle(fontSize: 17))]),
+      );
+}
+
+/// Dörd işıldayan ulduz, tək CustomPainter
+class _SparklePainter extends CustomPainter {
+  final Animation<double> t;
+  _SparklePainter(this.t) : super(repaint: t);
+  static const _pts = [(.12, .46, 0.0), (.86, .30, .25), (.30, .72, .5), (.74, .76, .75)];
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint();
+    for (final q in _pts) {
+      final v = (t.value + q.$3) % 1;
+      final k = .5 + .5 * math.sin(v * 2 * math.pi);
+      final s = 2 + 5 * k;
+      final x = size.width * q.$1, y = size.height * q.$2;
+      p.color = Colors.white.withAlpha((80 + 175 * k).round());
+      canvas.drawPath(
+        Path()
+          ..moveTo(x, y - 2 * s)..lineTo(x + .4 * s, y - .4 * s)..lineTo(x + 2 * s, y)..lineTo(x + .4 * s, y + .4 * s)
+          ..lineTo(x, y + 2 * s)..lineTo(x - .4 * s, y + .4 * s)..lineTo(x - 2 * s, y)..lineTo(x - .4 * s, y - .4 * s)..close(),
+        p,
+      );
+    }
   }
+  @override
+  bool shouldRepaint(covariant _SparklePainter old) => false;
 }
