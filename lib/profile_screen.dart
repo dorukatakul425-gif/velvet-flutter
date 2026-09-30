@@ -1,48 +1,13 @@
 // Velvet — Profil ekranı + Ziyarətçi profili (Flutter)
 //
-// QURAŞDIRMA
-//  1) pubspec.yaml → dependencies: altına əlavə et:
-//        flutter_svg: ^2.0.10
-//  2) Bu faylı lib/profile_screen.dart kimi saxla.
-//  3) main.dart-ı bununla əvəz et:  export 'profile_screen.dart';  və ya birbaşa bu faylı işə sal.
-//
-// 120 HZ ÜÇÜN
-//  • iOS: ios/Runner/Info.plist içinə əlavə et →
-//        <key>CADisableMinimumFrameDurationOnPhone</key><true/>
-//  • Android: flutter_displaymode paketi ilə ən yüksək yeniləmə tezliyini seç.
-//
-// PERFORMANS QAYDALARI (kodda tətbiq olunub)
-//  • Hər animasiya öz RepaintBoundary-sində, yalnız lazım olan hissə yenidən çəkilir.
-//  • Scroll zamanı setState yoxdur; bütün ekran yenidən qurulmur.
-//  • Bulanıqlıq (blur/BackdropFilter) əvəzinə ucuz RadialGradient işıqlanma.
-//  • Sayğac yalnız bir Text-i yeniləyir (ValueListenableBuilder).
-//  • Ulduzlar tək CustomPainter ilə çəkilir (repaint: animasiya).
-//  • SVG ikonlar sətir açarı ilə keşlənir.
+// Bu fayl lib/profile_screen.dart kimi saxlanır.
+// main.dart-da:  import 'profile_screen.dart';
+// pubspec.yaml:  flutter_svg: ^2.0.10
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-  ));
-  runApp(const VelvetApp());
-}
-
-class VelvetApp extends StatelessWidget {
-  const VelvetApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
-        home: const ProfileScreen(),
-      );
-}
 
 /* ───────────── Rənglər ───────────── */
 const kBg = Color(0xFF07000F);
@@ -52,6 +17,9 @@ const kLilac = Color(0xFFC084FC);
 const kTeal = Color(0xFF19D4B4);
 const kMut = Color(0x8CE9E2FF);
 const kInk = Color(0xFFF1EAFF);
+
+/// Jeton balansı (main.dart və profil ekranı bunu paylaşır)
+final ValueNotifier<int> jetonBalance = ValueNotifier<int>(40);
 
 /* ───────────── SVG ikonlar ───────────── */
 const _defs = r'''<defs>
@@ -236,13 +204,13 @@ class _Chip extends StatelessWidget {
 
 /* ═════════════════ PROFİL EKRANI ═════════════════ */
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final String name;
+  const ProfileScreen({super.key, this.name = 'Velvet istifadəçisi'});
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateMixin {
-  static const _name = 'Velvet istifadəçisi';
   static const _id = '48219037';
 
   late final _ring = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
@@ -285,6 +253,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
     return Scaffold(
+      backgroundColor: kBg,
       body: Stack(children: [
         Positioned(top: 0, left: 0, right: 0, height: 340, child: IgnorePointer(child: RepaintBoundary(child: _Aurora(ctrl: _aur)))),
         CustomScrollView(
@@ -311,14 +280,14 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   Widget _header() => GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () { HapticFeedback.selectionClick(); Navigator.of(context).push(_slide(const PublicProfileScreen())); },
+        onTap: () { HapticFeedback.selectionClick(); Navigator.of(context).push(_slide(PublicProfileScreen(name: widget.name))); },
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
           child: Row(children: [
             _Avatar(size: 78, ring: _ring),
             const SizedBox(width: 16),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text(_name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+              Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
               const SizedBox(height: 7),
               const Wrap(spacing: 6, runSpacing: 6, children: [_Chip('lv', 'Zənginlik:Sv.1'), _Chip('hg', 'Aktiv deyil')]),
               const SizedBox(height: 6),
@@ -429,12 +398,19 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         _Item('wallet', 'Pulqabı', () => velvetToast(context, 'Pulqabı'), right: Container(
           padding: const EdgeInsets.fromLTRB(6, 5, 13, 5),
           decoration: BoxDecoration(color: const Color(0x14FFFFFF), borderRadius: BorderRadius.circular(18)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: const [
-            Ico('coin', size: 20), SizedBox(width: 6),
-            Text('40', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            SizedBox(width: 8), SizedBox(width: 1, height: 14, child: ColoredBox(color: Color(0x33FFFFFF))), SizedBox(width: 8),
-            Ico('gem', size: 20), SizedBox(width: 6),
-            Text('0', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Ico('coin', size: 20),
+            const SizedBox(width: 6),
+            ValueListenableBuilder<int>(
+              valueListenable: jetonBalance,
+              builder: (_, j, __) => Text('$j', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(width: 8),
+            const SizedBox(width: 1, height: 14, child: ColoredBox(color: Color(0x33FFFFFF))),
+            const SizedBox(width: 8),
+            const Ico('gem', size: 20),
+            const SizedBox(width: 6),
+            const Text('0', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           ]),
         )),
         _Item('family', 'Ailə', () => velvetToast(context, 'Ailə'), right: Row(mainAxisSize: MainAxisSize.min, children: const [
@@ -575,7 +551,8 @@ class _Aurora extends StatelessWidget {
 
 /* ═════════════════ ZİYARƏTÇİ PROFİLİ ═════════════════ */
 class PublicProfileScreen extends StatefulWidget {
-  const PublicProfileScreen({super.key});
+  final String name;
+  const PublicProfileScreen({super.key, this.name = 'Velvet istifadəçisi'});
   @override
   State<PublicProfileScreen> createState() => _PublicProfileScreenState();
 }
@@ -599,6 +576,7 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> with TickerPr
     final outline = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0xFF8448E8);
     final shadow = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0x66501AAA);
     return Scaffold(
+      backgroundColor: kBg,
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Stack(fit: StackFit.passthrough, children: [
@@ -664,11 +642,11 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> with TickerPr
               ),
             ])),
             const SizedBox(height: 22),
-            const Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text('Velvet istifadəçisi', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
-              _Chip('age', '22', fg: Color(0xFFCFC6EA)),
-              _Chip('leaf', 'Yeni başlayan', grad: LinearGradient(colors: [Color(0xFF2FD84A), Color(0xFF8BE34A)])),
-              _Chip('lv', '1', grad: LinearGradient(colors: [Color(0xFF0FAE5F), Color(0xFF2BD6A0)])),
+            Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text(widget.name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+              const _Chip('age', '22', fg: Color(0xFFCFC6EA)),
+              const _Chip('leaf', 'Yeni başlayan', grad: LinearGradient(colors: [Color(0xFF2FD84A), Color(0xFF8BE34A)])),
+              const _Chip('lv', '1', grad: LinearGradient(colors: [Color(0xFF0FAE5F), Color(0xFF2BD6A0)])),
             ]),
             const SizedBox(height: 10),
             const Text('1 İzlənilən · 0 İzləyici', style: TextStyle(fontSize: 17, color: kMut)),
