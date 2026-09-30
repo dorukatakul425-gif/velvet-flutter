@@ -1,9 +1,6 @@
 name: velvet_app
-
 description: Velvet — gerçek zamanlı sosyal sesli sohbet uygulaması
-
 publish_to: "none"
-
 version: 1.1.0+2
 
 environment:
@@ -18,10 +15,11 @@ dependencies:
   livekit_client: ^2.4.7
   permission_handler: ^11.3.1
   supabase_flutter: ^2.8.0
+  flutter_svg: ^2.0.10
 
   # Hediye animasyonları için eklendi:
-  video_player: ^2.9.2      # MP4 animasyonları oynatır (ses dahil)
-  audioplayers: ^6.1.0      # İsteğe bağlı: ayrı ses efektleri için
+  video_player: ^2.9.2
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -32,7 +30,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Animasyon videoları ve hediye ikonları buradan yüklenir.
-  # ZIP'teki mp4 ve png dosyalarını projenizde assets/gifts/ klasörüne koyun.
   assets:
     - assets/gifts/
