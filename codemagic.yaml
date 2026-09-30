@@ -33,8 +33,10 @@ workflows:
           s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
           open(p, 'w').write(s)
           PY
-      - name: Paketleri yükle
-        script: flutter pub get
+      - name: Paketleri temizle ve yükle
+        script: |
+          flutter clean
+          flutter pub get
       - name: APK oluştur
         script: flutter build apk --release --dart-define=LIVEKIT_TOKEN_ENDPOINT=$LIVEKIT_TOKEN_ENDPOINT
       - name: İmza parmak izini yazdır
