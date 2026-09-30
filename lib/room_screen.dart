@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'services/live_audio_service.dart';
 import 'services/room_messages_service.dart';
 
@@ -209,9 +210,14 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final pad = MediaQuery.of(context).padding;
+    final mq = MediaQuery.of(context);
+    // Android naviqasiya düymələri və iPhone ev xətti üçün real alt boşluq
+    final safeBottom = math.max(mq.viewPadding.bottom, mq.padding.bottom);
+    final barBottom = safeBottom + 8;
+    const barH = 42.0;
     return Scaffold(
       backgroundColor: const Color(0xFF120C65),
+      resizeToAvoidBottomInset: false,
       body: Stack(children: [
         // Otaq fonu
         Positioned.fill(child: Image.network('$kImg/velvet-room-bg.JPG', fit: BoxFit.cover,
@@ -220,63 +226,93 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
         const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
             begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x40180F69), Color(0x80100847)])))),
 
+        // Tək ekran — sürüşdürmə yoxdur, hər şey ekrana sığır
         SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverPadding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 0), sliver: SliverToBoxAdapter(child: _Entrance(child: _header()))),
-              SliverPadding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 0), sliver: SliverToBoxAdapter(child: _Entrance(delay: 60, child: _rankRow()))),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 6, mainAxisSpacing: 8, childAspectRatio: .74),
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => _Entrance(delay: 90 + 15 * i, child: SeatTile(
-                      index: i, seat: _seats[i], isMe: _seats[i]?.name == widget.myName,
-                      onTap: () => _seats[i] != null ? _openSeatProfile(i) : _sit(i),
-                    )),
-                    childCount: 24,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, barBottom + barH + 10),
+            child: Column(children: [
+              _Entrance(child: _header()),
+              const SizedBox(height: 10),
+              _Entrance(delay: 60, child: _rankRow()),
+              const SizedBox(height: 12),
+              Expanded(child: LayoutBuilder(builder: (context, box) {
+                // Oturacaq sırasının hündürlüyünü ekrana görə hesabla
+                final cellW = box.maxWidth / 6;
+                final rowH = math.min(cellW / .74, (box.maxHeight * .62 - 3 * 6) / 4).clamp(44.0, 90.0);
+                return Column(children: [
+                  SizedBox(
+                    height: rowH * 4 + 3 * 6,
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: 24,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 6, mainAxisSpacing: 6, mainAxisExtent: rowH),
+                      itemBuilder: (_, i) => _Entrance(delay: 90 + 15 * i, child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: SeatTile(
+                          index: i, seat: _seats[i], isMe: _seats[i]?.name == widget.myName,
+                          onTap: () => _seats[i] != null ? _openSeatProfile(i) : _sit(i),
+                        ),
+                      )),
+                    ),
                   ),
-                ),
-              ),
-              SliverPadding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 0), sliver: SliverToBoxAdapter(child: _Entrance(delay: 420, child: _audience()))),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                sliver: SliverToBoxAdapter(child: _Entrance(delay: 480, child: FractionallySizedBox(
-                  widthFactor: .8, alignment: Alignment.centerLeft,
-                  child: _DarkBox(child: const Text(
-                    'Söhbət otağına xoş gəldiniz! Zəhmət olmasa söhbətlərdə hörmətli olun. Yetkinlik yaşına çatmayanların yayımı və onları riskə atan paylaşımlar qəti qadağandır. Açıq-saçıq məzmun, qumar, dələduzluq, təhqir, istismar, hədə və digər qayda pozuntuları cəzalandırılır. Pozuntunu görsəniz, bildirin.',
-                    style: TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF31EF9B)),
+                  const SizedBox(height: 10),
+                  _Entrance(delay: 420, child: _audience()),
+                  const SizedBox(height: 8),
+                  Flexible(child: _Entrance(delay: 480, child: Align(
+                    alignment: Alignment.topLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: .8,
+                      child: _DarkBox(child: const Text(
+                        'Söhbət otağına xoş gəldiniz! Zəhmət olmasa söhbətlərdə hörmətli olun. Yetkinlik yaşına çatmayanların yayımı və onları riskə atan paylaşımlar qəti qadağandır. Açıq-saçıq məzmun, qumar, dələduzluq, təhqir, istismar, hədə və digər qayda pozuntuları cəzalandırılır. Pozuntunu görsəniz, bildirin.',
+                        maxLines: 4, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFF31EF9B)),
+                      )),
+                    ),
+                  ))),
+                  const SizedBox(height: 6),
+                  _Entrance(delay: 520, child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: .8,
+                      child: _DarkBox(opacity: .58, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7), child: Row(children: [
+                        const Expanded(child: Text('Daha çox adam qoşulsun deyə otağı paylaşın', maxLines: 2, style: TextStyle(fontSize: 12.5, color: Color(0xFF31EF9B)))),
+                        const SizedBox(width: 6),
+                        Pressable(onTap: _share, child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), gradient: const LinearGradient(colors: [Color(0xFF8F64FF), Color(0xFFD85CFF)])),
+                          child: Text(_shared ? 'Kopyalandı' : 'Paylaş', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        )),
+                      ])),
+                    ),
                   )),
-                ))),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                sliver: SliverToBoxAdapter(child: _Entrance(delay: 520, child: FractionallySizedBox(
-                  widthFactor: .8, alignment: Alignment.centerLeft,
-                  child: _DarkBox(opacity: .58, child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, runSpacing: 6, children: [
-                    const Text('Daha çox adam qoşulsun deyə otağı paylaşın', style: TextStyle(fontSize: 13, color: Color(0xFF31EF9B))),
-                    Pressable(onTap: _share, child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(17), gradient: const LinearGradient(colors: [Color(0xFF8F64FF), Color(0xFFD85CFF)])),
-                      child: Text(_shared ? 'Kopyalandı' : 'Paylaş', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    )),
-                  ])),
-                ))),
-              ),
-              SliverToBoxAdapter(child: SizedBox(height: 70 + math.max(4, pad.bottom - 28))),
-            ],
+                ]);
+              })),
+            ]),
           ),
         ),
 
         // Hədiyyə animasiyası
         if (_playing != null)
-          Positioned(left: 0, right: 0, bottom: 80 + pad.bottom, height: MediaQuery.of(context).size.height * .42,
+          Positioned(left: 0, right: 0, bottom: barBottom + barH + 12, height: mq.size.height * .42,
               child: IgnorePointer(child: GiftBurst(key: ValueKey(_playing!.id), controller: _giftAnim, gift: _playing!))),
 
-        // Alt panel
-        Positioned(left: 12, right: 6, bottom: math.max(4, pad.bottom - 28), child: _bottomBar()),
+        // Sağ altda — hədiyyə ikonunun üstündə iki GIF (alt-alta)
+        Positioned(
+          right: 6,
+          bottom: barBottom + barH + 12,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Pressable(onTap: _openGifts, child: Image.asset('assets/gifts/odul-hediye-guclu-v3.gif', width: 58, height: 58, fit: BoxFit.contain, gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58))),
+            const SizedBox(height: 6),
+            Pressable(onTap: () => _soon('Xəzinə tezliklə'), child: Image.asset('assets/gifts/hazine-guclu-v3.gif', width: 58, height: 58, fit: BoxFit.contain, gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58))),
+          ]),
+        ),
+
+        // Alt panel — sistem düymələrinin üstündə
+        Positioned(left: 12, right: 6, bottom: barBottom, child: _bottomBar()),
 
         // Otaq menyusu
         IgnorePointer(
@@ -290,7 +326,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
                 filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
                 child: Container(
                   color: const Color(0x61080818),
-                  padding: EdgeInsets.fromLTRB(14, pad.top + 64, 14, 0),
+                  padding: EdgeInsets.fromLTRB(14, mq.padding.top + 64, 14, 0),
                   alignment: Alignment.topCenter,
                   child: AnimatedSlide(
                     duration: const Duration(milliseconds: 260),
@@ -316,6 +352,18 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
     );
   }
 
+  static const _exitSvg = """
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE3E8"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 3.4v7.8" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M7.05 6.35a7.6 7.6 0 1 0 9.9 0" fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linecap="round"/>
+</svg>""";
+
   Widget _header() => Row(children: [
         Container(
           width: 48, height: 48,
@@ -339,12 +387,19 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
         const SizedBox(width: 10),
         Pressable(onTap: () => HapticFeedback.selectionClick(), child: const Padding(padding: EdgeInsets.all(3), child: Icon(Icons.more_horiz_rounded, size: 30))),
         const SizedBox(width: 10),
+        // Çıxış — SVG ikon
         Pressable(
           onTap: () { HapticFeedback.selectionClick(); setState(() => _menuOpen = true); },
           child: Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-            child: const Icon(Icons.logout_rounded, size: 18),
+            width: 36, height: 36,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFF6B7F), Color(0xFFE0102D)]),
+              border: Border.all(color: Colors.white.withOpacity(.55), width: 1),
+              boxShadow: const [BoxShadow(color: Color(0x66E0102D), blurRadius: 12, offset: Offset(0, 3))],
+            ),
+            child: SvgPicture.string(_exitSvg),
           ),
         ),
       ]);
@@ -417,7 +472,7 @@ class _RoomScreenState extends State<RoomScreen> with TickerProviderStateMixin {
               ]),
             ),
           )),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           _RoundBtn(onTap: _toggleMic, color: _muted ? null : const Color(0xFF28A96B), child: Icon(_muted ? Icons.mic_off_rounded : Icons.mic_rounded, size: 22, color: const Color(0xFFD6D6DA))),
           const SizedBox(width: 4),
           _RoundBtn(onTap: _toggleSpeaker, child: Icon(_speakerOn ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 23, color: const Color(0xFFD6D6DA))),
