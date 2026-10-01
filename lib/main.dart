@@ -9,7 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'common.dart';
 import 'home_screen.dart';
 import 'room_screen.dart' show RoomScreen;
-import 'profile_screen.dart' show ProfileScreen, jetonBalance;
+import 'profile_screen.dart' show ProfileScreen;
 
 const _supabaseUrl = 'https://jvbilhaajtfxtfljyqoi.supabase.co';
 const _supabaseKey = 'sb_publishable_VDPBDt0HFJSLOgnW-jQtyg_ADLj8WuU';
@@ -500,7 +500,7 @@ class _ShellState extends State<_Shell> {
   int _tab = 0;
 
   void _room() => Navigator.of(context).push(vRoute(RoomScreen(myName: widget.name.split(' ').first), from: const Offset(0, .06)));
-  void _profile() => Navigator.of(context).push(vRoute(ProfileScreen(name: widget.name)));
+  void _profile() => Navigator.of(context).push(vRoute(const ProfileScreen()));
 
   @override
   Widget build(BuildContext context) {
@@ -508,8 +508,7 @@ class _ShellState extends State<_Shell> {
       backgroundColor: kBg,
       extendBody: true,
       body: IndexedStack(index: _tab == 3 ? 1 : 0, children: [
-        ValueListenableBuilder<int>(valueListenable: jetonBalance, builder: (_, j, __) =>
-            HomeScreen(name: widget.name, jeton: j, onRoom: _room, onProfile: _profile)),
+        HomeScreen(name: widget.name, jeton: 10000, onRoom: _room, onProfile: _profile),
         const _Messages(),
       ]),
       bottomNavigationBar: _BottomNav(index: _tab, onTap: (i) {
