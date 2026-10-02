@@ -6,14 +6,123 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'common.dart';
 import 'home_screen.dart';
 import 'room_screen.dart' show RoomScreen;
 import 'profile_screen.dart' show ProfileScreen;
+// Bu fayl "flutterfire configure" əmri ilə avtomatik yaranır:
+import 'firebase_options.dart';
 
 const _supabaseUrl = 'https://jvbilhaajtfxtfljyqoi.supabase.co';
 const _supabaseKey = 'sb_publishable_VDPBDt0HFJSLOgnW-jQtyg_ADLj8WuU';
 bool _supabaseReady = false;
+
+// ─── Local notifications plugin ───────────────────────────────────────────────
+final FlutterLocalNotificationsPlugin _localNotif =
+    FlutterLocalNotificationsPlugin();
+
+// Android üçün bildirim kanalı
+const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  'velvet_high_importance', // kanal id
+  'Velvet Bildirişləri',    // kanal adı (istifadəçi görür)
+  description: 'Velvet tətbiqinin push bildirişləri',
+  importance: Importance.max,
+  playSound: true,
+);
+
+// ─── Arxa fon işləyicisi (tətbiq bağlı olanda) ────────────────────────────────
+@pragma('vm:entry-point')
+Future<void> _bgHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('📩 Arxa fon bildirişi: ${message.notification?.title}');
+}
+
+// ─── Bildirişi local olaraq göstər ────────────────────────────────────────────
+void _showLocalNotification(RemoteMessage message) {
+  final notif = message.notification;
+  if (notif == null) return;
+  _localNotif.show(
+    notif.hashCode,
+    notif.title,
+    notif.body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channel.id,
+        _channel.name,
+        channelDescription: _channel.description,
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        icon: '@mipmap/ic_launcher',
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    ),
+  );
+}
+
+// ─── Firebase + Local Notifications quraşdırması ──────────────────────────────
+Future<void> _initNotifications() async {
+  // Firebase başlat
+  await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform);
+
+  // Arxa fon işləyicisini qeyd et
+  FirebaseMessaging.onBackgroundMessage(_bgHandler);
+
+  // Android kanalını yarat
+  await _localNotif
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(_channel);
+
+  // iOS üçün ön plan göstərmə seçimləri
+  await FirebaseMessaging.instance
+      .setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  // Local notifications başlat
+  const initSettings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    iOS: DarwinInitializationSettings(),
+  );
+  await _localNotif.initialize(initSettings);
+
+  // İzin istə (iOS + Android 13+)
+  final settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  debugPrint('🔔 Bildiriş icazəsi: ${settings.authorizationStatus}');
+
+  // FCM token al (backend-ə göndər, istifadəçiyə özəl bildiriş üçün lazımdır)
+  final token = await FirebaseMessaging.instance.getToken();
+  debugPrint('📱 FCM Token: $token');
+
+  // Bütün istifadəçilərə bildiriş üçün "herkese" mövzusuna abunə ol
+  await FirebaseMessaging.instance.subscribeToTopic('herkese');
+  debugPrint('✅ "herkese" mövzusuna abunə olundu');
+
+  // Tətbiq AÇIQKEN gələn bildiriş → local notification kimi göstər
+  FirebaseMessaging.onMessage.listen(_showLocalNotification);
+
+  // Bildirişə toxunularaq tətbiq açılırsa
+  FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+    debugPrint('🖱 Bildirişə toxunuldu: ${msg.data}');
+    // İstəsən buradan müəyyən ekrana yönləndir
+  });
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,10 +131,20 @@ Future<void> main() async {
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: kBg,
   ));
+
+  // Supabase başlat
   try {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseKey);
     _supabaseReady = true;
   } catch (_) {}
+
+  // Firebase + Push bildirişlərini başlat
+  try {
+    await _initNotifications();
+  } catch (e) {
+    debugPrint('⚠️ Bildiriş quraşdırılması alınmadı: $e');
+  }
+
   runApp(const VelvetApp());
 }
 
@@ -202,13 +321,11 @@ class _VelvetMarkPainter extends CustomPainter {
     final float = math.sin(tick) * 3.8;
     final center = Offset(160, 160 + float);
 
-    // Yumşaq işıq hərəkətə dərinlik verir, fonun əsas rəngini dəyişmir.
     canvas.drawCircle(center, 119 * reveal, Paint()
       ..shader = const RadialGradient(colors: [
         Color(0x6B7B2FF7), Color(0x1FFF3EA5), Color(0x0007000F),
       ], stops: [0, .57, 1]).createShader(Rect.fromCircle(center: center, radius: 119)));
 
-    // İki incə səs trayektoriyası: halqalar yavaş dönür, sıçramır.
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(tick * .11);
@@ -226,7 +343,6 @@ class _VelvetMarkPainter extends CustomPainter {
     }
     canvas.restore();
 
-    // Kiçik daşlar — əl ilə çəkilmiş, vahid vektor səthlər.
     final motes = <(Offset, double, Color, double)>[
       (const Offset(49, 99), 3.1, _cyan, .0),
       (const Offset(275, 98), 4.4, _rose, 1.2),
@@ -243,7 +359,6 @@ class _VelvetMarkPainter extends CustomPainter {
       canvas.drawCircle(c, mote.$2 * .48 * reveal, Paint()..color = mote.$3.withOpacity(reveal));
     }
 
-    // Mərkəzi şüşə nişan: kölgə + arxa üz + parlaq kənar.
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.scale(.76 + .24 * reveal);
@@ -264,7 +379,6 @@ class _VelvetMarkPainter extends CustomPainter {
         colors: [Color(0xE6E5CBFF), Color(0x887B2FF7), Color(0xCCFF3EA5)],
       ).createShader(const Rect.fromLTWH(-80, -80, 160, 160)));
 
-    // Soldan və sağdan qatlanan məxmər lentlər bənzərsiz V yaradır.
     final left = Path()
       ..moveTo(-58, -42)..cubicTo(-51, -52, -26, -53, -19, -39)
       ..lineTo(0, 20)..lineTo(-17, 53)
@@ -289,13 +403,11 @@ class _VelvetMarkPainter extends CustomPainter {
     canvas.drawPath(Path()..moveTo(40, -40)..quadraticBezierTo(29, -42, 24, -29),
       Paint()..color = const Color(0x99FFFFFF)..strokeWidth = 2
         ..strokeCap = StrokeCap.round ..style = PaintingStyle.stroke);
-    // V-nin ucundakı işıq zərbəsi.
     canvas.drawCircle(const Offset(0, 43), 8, Paint()..color = _rose.withOpacity(.8)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 11));
     canvas.drawCircle(const Offset(0, 43), 2.2, Paint()..color = Colors.white);
     canvas.restore();
 
-    // Ön plandakı səs dalğaları nişanın ətrafında yaşayır.
     for (var i = 0; i < 5; i++) {
       final h = 9.0 + (i == 2 ? 15 : (i == 1 || i == 3 ? 8 : 0)) +
         math.sin(tick * 2 + i * .8) * 4;
