@@ -52,4 +52,7 @@ workflows:
         script: |
           flutter clean
           flutter pub get
-      - name:
+      - name: APK derle
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
