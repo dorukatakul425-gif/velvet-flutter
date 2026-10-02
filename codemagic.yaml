@@ -2,7 +2,7 @@ workflows:
   android-apk:
     name: Velvet Android APK
     max_build_duration: 60
-    instance_type: mac_mini_m2
+    instance_type: linux_x2
     environment:
       flutter: stable
       groups: [velvet_config]
@@ -14,8 +14,23 @@ workflows:
       - name: Android izinlerini ve giriş bağlantısını ekle
         script: |
           M=android/app/src/main/AndroidManifest.xml
-          perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <application|' "$M"
+          perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' "$M"
           perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
+      - name: Firebase ekle
+        script: |
+          cp google-services.json android/app/google-services.json
+          flutter pub add firebase_core firebase_messaging
+          python3 - <<'PY'
+          p = 'android/settings.gradle.kts'
+          s = open(p).read()
+          s = s.replace('id("com.android.application")', 'id("com.google.gms.google-services") version "4.4.2" apply false\n    id("com.android.application")', 1)
+          open(p, 'w').write(s)
+          p = 'android/app/build.gradle.kts'
+          s = open(p).read()
+          s = s.replace('id("com.android.application")', 'id("com.android.application")\n    id("com.google.gms.google-services")', 1)
+          s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          open(p, 'w').write(s)
+          PY
       - name: Release imzalamasını ayarla
         script: |
           cat > android/key.properties <<EOF
@@ -37,8 +52,4 @@ workflows:
         script: |
           flutter clean
           flutter pub get
-      - name: APK oluştur
-        script: flutter build apk --release --dart-define=LIVEKIT_TOKEN_ENDPOINT=$LIVEKIT_TOKEN_ENDPOINT
-      - name: İmza parmak izini yazdır
-        script: keytool -list -v -keystore "$CM_KEYSTORE_PATH" -alias "$CM_KEY_ALIAS" -storepass "$CM_KEYSTORE_PASSWORD" | grep -E "SHA1|SHA256"
-    artifacts: [build/app/outputs/flutter-apk/*.apk]
+      - name:
