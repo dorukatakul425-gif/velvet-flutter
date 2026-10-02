@@ -6,123 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'common.dart';
 import 'home_screen.dart';
 import 'room_screen.dart' show RoomScreen;
 import 'profile_screen.dart' show ProfileScreen;
-// Bu fayl "flutterfire configure" əmri ilə avtomatik yaranır:
-import 'firebase_options.dart';
 
 const _supabaseUrl = 'https://jvbilhaajtfxtfljyqoi.supabase.co';
 const _supabaseKey = 'sb_publishable_VDPBDt0HFJSLOgnW-jQtyg_ADLj8WuU';
 bool _supabaseReady = false;
-
-// ─── Local notifications plugin ───────────────────────────────────────────────
-final FlutterLocalNotificationsPlugin _localNotif =
-    FlutterLocalNotificationsPlugin();
-
-// Android üçün bildirim kanalı
-const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-  'velvet_high_importance', // kanal id
-  'Velvet Bildirişləri',    // kanal adı (istifadəçi görür)
-  description: 'Velvet tətbiqinin push bildirişləri',
-  importance: Importance.max,
-  playSound: true,
-);
-
-// ─── Arxa fon işləyicisi (tətbiq bağlı olanda) ────────────────────────────────
-@pragma('vm:entry-point')
-Future<void> _bgHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint('📩 Arxa fon bildirişi: ${message.notification?.title}');
-}
-
-// ─── Bildirişi local olaraq göstər ────────────────────────────────────────────
-void _showLocalNotification(RemoteMessage message) {
-  final notif = message.notification;
-  if (notif == null) return;
-  _localNotif.show(
-    notif.hashCode,
-    notif.title,
-    notif.body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channel.id,
-        _channel.name,
-        channelDescription: _channel.description,
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: const DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    ),
-  );
-}
-
-// ─── Firebase + Local Notifications quraşdırması ──────────────────────────────
-Future<void> _initNotifications() async {
-  // Firebase başlat
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform);
-
-  // Arxa fon işləyicisini qeyd et
-  FirebaseMessaging.onBackgroundMessage(_bgHandler);
-
-  // Android kanalını yarat
-  await _localNotif
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(_channel);
-
-  // iOS üçün ön plan göstərmə seçimləri
-  await FirebaseMessaging.instance
-      .setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-
-  // Local notifications başlat
-  const initSettings = InitializationSettings(
-    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    iOS: DarwinInitializationSettings(),
-  );
-  await _localNotif.initialize(initSettings);
-
-  // İzin istə (iOS + Android 13+)
-  final settings = await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-  debugPrint('🔔 Bildiriş icazəsi: ${settings.authorizationStatus}');
-
-  // FCM token al (backend-ə göndər, istifadəçiyə özəl bildiriş üçün lazımdır)
-  final token = await FirebaseMessaging.instance.getToken();
-  debugPrint('📱 FCM Token: $token');
-
-  // Bütün istifadəçilərə bildiriş üçün "herkese" mövzusuna abunə ol
-  await FirebaseMessaging.instance.subscribeToTopic('herkese');
-  debugPrint('✅ "herkese" mövzusuna abunə olundu');
-
-  // Tətbiq AÇIQKEN gələn bildiriş → local notification kimi göstər
-  FirebaseMessaging.onMessage.listen(_showLocalNotification);
-
-  // Bildirişə toxunularaq tətbiq açılırsa
-  FirebaseMessaging.onMessageOpenedApp.listen((msg) {
-    debugPrint('🖱 Bildirişə toxunuldu: ${msg.data}');
-    // İstəsən buradan müəyyən ekrana yönləndir
-  });
-}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -131,20 +22,10 @@ Future<void> main() async {
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: kBg,
   ));
-
-  // Supabase başlat
   try {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseKey);
     _supabaseReady = true;
   } catch (_) {}
-
-  // Firebase + Push bildirişlərini başlat
-  try {
-    await _initNotifications();
-  } catch (e) {
-    debugPrint('⚠️ Bildiriş quraşdırılması alınmadı: $e');
-  }
-
   runApp(const VelvetApp());
 }
 
@@ -236,10 +117,9 @@ class _RootState extends State<_Root> {
   }
 }
 
-/* ─────────── Velvet açılış səhnəsi — vektor, hər ekran ölçüsündə kəskin ─────────── */
+/* ─────────── Velvet açılış səhnəsi ─────────── */
 class _Splash extends StatelessWidget {
   const _Splash({super.key});
-
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: kBg,
@@ -266,8 +146,6 @@ class _VelvetWordmark extends StatelessWidget {
   );
 }
 
-/// Bir faylda saxlanan, piksel ölçüsündən asılı olmayan Velvet nişanı.
-/// Lentlər V hərfini, hərəkətdəki halqalar isə canlı səsi təsvir edir.
 class _VelvetMark extends StatefulWidget {
   final double size;
   const _VelvetMark({required this.size});
