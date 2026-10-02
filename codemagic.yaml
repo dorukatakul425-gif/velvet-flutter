@@ -9,78 +9,104 @@ workflows:
       android_signing:
         - velvet_keystore
     scripts:
-      - name: Android projesini oluştur
-        script: flutter create --platforms=android --project-name velvet_app --org com.velvet .
-      - name: Android izinlerini ve giriş bağlantısını ekle
+      - name: Projeyi oluştur ve temizle
+        script: |
+          flutter create --platforms=android --project-name velvet_app --org com.velvet .
+          flutter clean
+          flutter pub get
+
+      - name: Android izinleri ve deep link
         script: |
           M=android/app/src/main/AndroidManifest.xml
           perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' "$M"
           perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
-      - name: Firebase ve paketleri ekle
+
+      - name: Firebase ve bildirim paketleri
         script: |
           cp google-services.json android/app/google-services.json
           flutter pub add firebase_core firebase_messaging "flutter_local_notifications:^18.0.0"
-          flutter pub get
-      - name: Gradle ayarlarını düzenle
+
+      - name: Gradle ayarla ve imzala
         script: |
-          python3 - <<'PY'
-          # settings.gradle.kts - google-services plugin ekle
-          p = 'android/settings.gradle.kts'
-          s = open(p).read()
-          if 'com.google.gms.google-services' not in s:
-              s = s.replace('id("com.android.application")', 'id("com.google.gms.google-services") version "4.4.2" apply false\n    id("com.android.application")', 1)
-          open(p, 'w').write(s)
-
-          # build.gradle.kts - tüm değişiklikler
-          p = 'android/app/build.gradle.kts'
-          s = open(p).read()
-
-          # google-services plugin uygula
-          if 'id("com.google.gms.google-services")' not in s:
-              s = s.replace('id("com.android.application")', 'id("com.android.application")\n    id("com.google.gms.google-services")', 1)
-
-          # minSdk 23
-          s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
-
-          # multiDexEnabled
-          if 'multiDexEnabled' not in s:
-              s = s.replace('defaultConfig {', 'defaultConfig {\n        multiDexEnabled = true', 1)
-
-          # coreLibraryDesugaring dependency
-          if 'desugar_jdk_libs' not in s:
-              s = s.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
-
-          # isCoreLibraryDesugaringEnabled
-          if 'isCoreLibraryDesugaringEnabled' not in s:
-              if 'compileOptions {' in s:
-                  s = s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
-              else:
-                  s = s.replace('android {', 'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }', 1)
-
-          open(p, 'w').write(s)
-          print("build.gradle.kts updated successfully")
-          PY
-      - name: Release imzalamasını ayarla
-        script: |
+          # key.properties
           cat > android/key.properties <<EOF
           storePassword=$CM_KEYSTORE_PASSWORD
           keyPassword=$CM_KEY_PASSWORD
           keyAlias=$CM_KEY_ALIAS
           storeFile=$CM_KEYSTORE_PATH
           EOF
+
           python3 - <<'PY'
+          import re
+
+          # ── settings.gradle.kts ──────────────────────────────────────
+          p = 'android/settings.gradle.kts'
+          s = open(p).read()
+          if 'com.google.gms.google-services' not in s:
+              s = s.replace(
+                  'id("com.android.application")',
+                  'id("com.google.gms.google-services") version "4.4.2" apply false\n    id("com.android.application")',
+                  1)
+          open(p, 'w').write(s)
+
+          # ── build.gradle.kts ─────────────────────────────────────────
           p = 'android/app/build.gradle.kts'
           s = open(p).read()
-          s = 'import java.util.Properties\nimport java.io.FileInputStream\n\n' + s
-          s = s.replace('android {', 'val keystoreProperties = Properties().apply {\n    load(FileInputStream(rootProject.file("key.properties")))\n}\n\nandroid {', 1)
-          s = s.replace('buildTypes {', 'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {', 1)
+
+          # imports
+          if 'import java.util.Properties' not in s:
+              s = 'import java.util.Properties\nimport java.io.FileInputStream\n\n' + s
+
+          # keystoreProperties
+          if 'keystoreProperties' not in s:
+              s = s.replace(
+                  'android {',
+                  'val keystoreProperties = Properties().apply {\n    load(FileInputStream(rootProject.file("key.properties")))\n}\n\nandroid {',
+                  1)
+
+          # google-services plugin
+          if 'id("com.google.gms.google-services")' not in s:
+              s = s.replace(
+                  'id("com.android.application")',
+                  'id("com.android.application")\n    id("com.google.gms.google-services")',
+                  1)
+
+          # minSdk
+          s = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 23', s)
+
+          # multiDexEnabled
+          if 'multiDexEnabled' not in s:
+              s = s.replace('defaultConfig {', 'defaultConfig {\n        multiDexEnabled = true', 1)
+
+          # compileOptions bloğu
+          if 'compileOptions' not in s:
+              s = s.replace(
+                  'defaultConfig {',
+                  'compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n        sourceCompatibility = JavaVersion.VERSION_1_8\n        targetCompatibility = JavaVersion.VERSION_1_8\n    }\n    defaultConfig {',
+                  1)
+          elif 'isCoreLibraryDesugaringEnabled' not in s:
+              s = s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+
+          # signingConfigs + buildTypes
+          if 'signingConfigs' not in s:
+              s = s.replace(
+                  'buildTypes {',
+                  'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {',
+                  1)
+
           s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+
+          # coreLibraryDesugaring dependency
+          if 'desugar_jdk_libs' not in s:
+              s = s.replace(
+                  'dependencies {',
+                  'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
+                  1)
+
           open(p, 'w').write(s)
+          print("✅ build.gradle.kts hazır")
           PY
-      - name: Paketleri temizle ve yükle
-        script: |
-          flutter clean
-          flutter pub get
+
       - name: APK derle
         script: flutter build apk --release
     artifacts:
