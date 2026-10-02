@@ -9,39 +9,14 @@ workflows:
       android_signing:
         - velvet_keystore
     scripts:
-      - name: Projeyi oluştur
-        script: |
-          flutter create --platforms=android --project-name velvet_app --org com.velvet .
-          flutter clean
-          flutter pub get
-
-      - name: Android izinleri ve deep link
+      - name: Android projesini oluştur
+        script: flutter create --platforms=android --project-name velvet_app --org com.velvet .
+      - name: Android izinlerini ve giriş bağlantısını ekle
         script: |
           M=android/app/src/main/AndroidManifest.xml
           perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' "$M"
           perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
-
-      - name: Firebase ve bildirim paketleri
-        script: |
-          cp google-services.json android/app/google-services.json
-          flutter pub add firebase_core firebase_messaging "flutter_local_notifications:^18.0.0"
-
-      - name: settings.gradle.kts ayarla
-        script: |
-          python3 - <<'PY'
-          p = 'android/settings.gradle.kts'
-          s = open(p).read()
-          if 'com.google.gms.google-services' not in s:
-              s = s.replace(
-                  'id("com.android.application")',
-                  'id("com.google.gms.google-services") version "4.4.2" apply false\n    id("com.android.application")',
-                  1)
-          open(p, 'w').write(s)
-          print("settings.gradle.kts OK")
-          print(open(p).read())
-          PY
-
-      - name: build.gradle.kts yaz
+      - name: Release imzalamasını ayarla
         script: |
           cat > android/key.properties <<EOF
           storePassword=$CM_KEYSTORE_PASSWORD
@@ -49,73 +24,19 @@ workflows:
           keyAlias=$CM_KEY_ALIAS
           storeFile=$CM_KEYSTORE_PATH
           EOF
-
-          cat > android/app/build.gradle.kts << 'GRADLE'
-          import java.util.Properties
-          import java.io.FileInputStream
-
-          val keystoreProperties = Properties().apply {
-              load(FileInputStream(rootProject.file("key.properties")))
-          }
-
-          plugins {
-              id("com.android.application")
-              id("kotlin-android")
-              id("dev.flutter.flutter-gradle-plugin")
-              id("com.google.gms.google-services")
-          }
-
-          android {
-              namespace = "com.velvet.velvet_app"
-              compileSdk = flutter.compileSdkVersion
-              ndkVersion = "27.0.12077973"
-
-              compileOptions {
-                  isCoreLibraryDesugaringEnabled = true
-                  sourceCompatibility = JavaVersion.VERSION_1_8
-                  targetCompatibility = JavaVersion.VERSION_1_8
-              }
-
-              kotlinOptions {
-                  jvmTarget = JavaVersion.VERSION_1_8.toString()
-              }
-
-              defaultConfig {
-                  applicationId = "com.velvet.velvet_app"
-                  minSdk = 23
-                  targetSdk = flutter.targetSdkVersion
-                  versionCode = flutter.versionCode
-                  versionName = flutter.versionName
-                  multiDexEnabled = true
-              }
-
-              signingConfigs {
-                  create("release") {
-                      keyAlias = keystoreProperties["keyAlias"] as String
-                      keyPassword = keystoreProperties["keyPassword"] as String
-                      storeFile = file(keystoreProperties["storeFile"] as String)
-                      storePassword = keystoreProperties["storePassword"] as String
-                  }
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.getByName("release")
-                      isMinifyEnabled = false
-                  }
-              }
-          }
-
-          flutter {
-              source = "../.."
-          }
-
-          dependencies {
-              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-          }
-          GRADLE
-          echo "build.gradle.kts yazıldı"
-
+          python3 - <<'PY'
+          p = 'android/app/build.gradle.kts'
+          s = open(p).read()
+          s = 'import java.util.Properties\nimport java.io.FileInputStream\n\n' + s
+          s = s.replace('android {', 'val keystoreProperties = Properties().apply {\n    load(FileInputStream(rootProject.file("key.properties")))\n}\n\nandroid {', 1)
+          s = s.replace('buildTypes {', 'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {', 1)
+          s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+          open(p, 'w').write(s)
+          PY
+      - name: Paketleri temizle ve yükle
+        script: |
+          flutter clean
+          flutter pub get
       - name: APK derle
         script: flutter build apk --release
     artifacts:
