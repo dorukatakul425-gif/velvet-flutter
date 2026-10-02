@@ -29,6 +29,12 @@ workflows:
           s = open(p).read()
           s = s.replace('id("com.android.application")', 'id("com.android.application")\n    id("com.google.gms.google-services")', 1)
           s = s.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          s = s.replace('multiDexEnabled = true\n', '')
+          s = s.replace('defaultConfig {', 'defaultConfig {\n        multiDexEnabled = true', 1)
+          if 'coreLibraryDesugaring' not in s:
+              s = s.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+          if 'isCoreLibraryDesugaringEnabled' not in s:
+              s = s.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
           open(p, 'w').write(s)
           PY
       - name: Release imzalamasını ayarla
