@@ -73,8 +73,7 @@ workflows:
           s = open(p).read()
           s = 'import java.util.Properties\nimport java.io.FileInputStream\n\n' + s
           s = s.replace('android {', 'val keystoreProperties = Properties().apply {\n    load(FileInputStream(rootProject.file("key.properties")))\n}\n\nandroid {', 1)
-          if 'signingConfigs' not in s:
-              s = s.replace('buildTypes {', 'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {', 1)
+          s = s.replace('buildTypes {', 'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n    buildTypes {', 1)
           s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
           open(p, 'w').write(s)
           PY
