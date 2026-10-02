@@ -19,7 +19,7 @@ workflows:
       - name: Firebase ekle
         script: |
           cp google-services.json android/app/google-services.json
-          flutter pub add firebase_core firebase_messaging
+          flutter pub add firebase_core firebase_messaging flutter_local_notifications
           python3 - <<'PY'
           p = 'android/settings.gradle.kts'
           s = open(p).read()
