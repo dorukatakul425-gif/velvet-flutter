@@ -328,40 +328,36 @@ class _LoginState extends State<_Login> {
     if (!widget.supabaseReady) { setState(() => _err = 'Serverə qoşulmaq alınmadı'); return; }
     setState(() { _busy = true; _err = null; });
     try {
-      // Native Google hesab seçici — brauzersiz, tətbiq içində
       final googleSignIn = GoogleSignIn(
-        clientId: null, // google-services.json-dan avtomatik alınır
-        scopes: ['email', 'profile'],
+        serverClientId: '991378775094-it021a3o3rphr29n8ebnkq01jg334dei.apps.googleusercontent.com',
+        scopes: ['email', 'profile', 'openid'],
       );
 
-      // Əvvəlki sessiya varsa çıx ki, hesab seçici yenidən açılsın
       await googleSignIn.signOut();
 
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        // İstifadəçi ləğv etdi
-        if (mounted) setState(() { _busy = false; _err = null; });
+        if (mounted) setState(() { _busy = false; });
         return;
       }
 
-      final googleAuth = await googleUser.authentication;
+      final googleAuth  = await googleUser.authentication;
       final idToken     = googleAuth.idToken;
       final accessToken = googleAuth.accessToken;
 
       if (idToken == null) {
-        if (mounted) setState(() => _err = 'Google token alınmadı');
+        if (mounted) setState(() => _err = 'Google token alınmadı. serverClientId yoxlayın.');
         if (mounted) setState(() => _busy = false);
         return;
       }
 
-      // Supabase-ə Google token ilə giriş
       await Supabase.instance.client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
       );
     } on Exception catch (e) {
-      if (mounted) setState(() => _err = e.toString().contains('network') ? 'İnternet bağlantısı yoxdur' : 'Google ilə giriş alınmadı');
+      if (mounted) setState(() => _err = 'Xəta: ${e.toString().substring(0, e.toString().length.clamp(0, 80))}');
     }
     if (mounted) setState(() => _busy = false);
   }
