@@ -15,7 +15,7 @@ workflows:
         script: |
           M=android/app/src/main/AndroidManifest.xml
           perl -0pi -e 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' "$M"
-          perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
+          perl -0pi -e 's|(<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>)|$1\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW"/>\n                <category android:name="android.intent.category.DEFAULT"/>\n                <category android:name="android.intent.category.BROWSABLE"/>\n                <data android:scheme="com.velvet.velvet_app" android:host="login-callback"/>\n            </intent-filter>|' "$M"
       - name: Release imzalamasını ayarla
         script: |
           cat > android/key.properties <<EOF
