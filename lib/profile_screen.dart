@@ -514,13 +514,21 @@ class PublicProfileScreen extends StatefulWidget {
   @override State<PublicProfileScreen> createState() => _PublicProfileScreenState();
 }
 
-class _PublicProfileScreenState extends State<PublicProfileScreen> {
-  final _svc     = ProfileService();
-  final _copied  = ValueNotifier<bool>(false);
-  final _picker  = ImagePicker();
-  VelvetProfile? _profile;
-  bool _loading  = true;
-  bool _uploading = false;
+class _PublicProfileScreenState extends State<PublicProfileScreen>
+    with TickerProviderStateMixin {
+  final _svc      = ProfileService();
+  final _copied   = ValueNotifier<bool>(false);
+  final _picker   = ImagePicker();
+  VelvetProfile?  _profile;
+  bool  _loading  = true;
+  bool  _uploading = false;
+
+  // Lokal seçilmiş foto (dərhal göstərilir, arxa planda yüklənir)
+  File? _localCover;
+
+  // Animasiya dəyişənləri (default Velvet arxa fon üçün)
+  late AnimationController _gradCtrl;
+  late Animation<double>    _gradAnim;
 
   bool get _isOwn => widget.userId == null ||
       widget.userId == Supabase.instance.client.auth.currentUser?.id;
@@ -528,6 +536,10 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Arxa fon gradient animasiyası — sonsuz, yavaş
+    _gradCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 6))
+      ..repeat(reverse: true);
+    _gradAnim = CurvedAnimation(parent: _gradCtrl, curve: Curves.easeInOut);
     _load();
   }
 
@@ -542,16 +554,27 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   }
 
   @override
-  void dispose() { _copied.dispose(); super.dispose(); }
+  void dispose() {
+    _gradCtrl.dispose();
+    _copied.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickCover() async {
     if (!_isOwn) return;
-    final xf = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final xf = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
     if (xf == null || !mounted) return;
-    setState(() => _uploading = true);
-    final url = await _svc.uploadCover(File(xf.path));
+    final file = File(xf.path);
+    // Dərhal lokaldan göstər
+    setState(() { _localCover = file; _uploading = true; });
+    // Arxa planda Supabase-ə yüklə
+    final url = await _svc.uploadCover(file);
     if (mounted) {
-      setState(() { _uploading = false; if (url != null) _profile = _profile?.copyWith(coverUrl: url); });
+      setState(() {
+        _uploading = false;
+        if (url != null) _profile = _profile?.copyWith(coverUrl: url);
+        // coverUrl gəldikdən sonra lokal faylı saxla (URL yüklənənə qədər)
+      });
       if (url != null) velvetToast(context, 'Arxa fon yeniləndi ✓');
     }
   }
@@ -565,47 +588,140 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     final outline = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0xFF8448E8);
     final shadow  = Paint()..style = PaintingStyle.stroke..strokeWidth = 22..strokeJoin = StrokeJoin.round..color = const Color(0x66501AAA);
 
+    // Arxa fon vəziyyəti: lokal > network > default
+    final hasCover = _localCover != null ||
+        (p?.coverUrl != null && p!.coverUrl!.isNotEmpty);
+
     return Scaffold(
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Stack(fit: StackFit.passthrough, children: [
-          // ── Hero ──
-          RepaintBoundary(child: SizedBox(height: 330, child: Stack(alignment: Alignment.center, children: [
-            // Arxa fon: cover_url varsa göstər
-            Positioned.fill(child: p?.coverUrl != null && p!.coverUrl!.isNotEmpty
-                ? Image.network(p.coverUrl!, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const DecoratedBox(
-                      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                          colors: [Color(0xFF6F3DF0), Color(0xFFA566F8), Color(0xFFD08CFF)], stops: [0, .62, 1]))))
-                : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [Color(0xFF6F3DF0), Color(0xFFA566F8), Color(0xFFD08CFF)], stops: [0, .62, 1])))),
-            // Overlay şəkil üzərindən
-            if (p?.coverUrl != null && p!.coverUrl!.isNotEmpty)
-              Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                  colors: [Colors.black.withAlpha(100), Colors.black.withAlpha(170)])))),
-            // "V" yalnız cover yoxdursa
-            if (p?.coverUrl == null || p!.coverUrl!.isEmpty) ...[
-              Stack(alignment: Alignment.center, children: [
-                Transform.translate(offset: const Offset(0, 10), child: _bigV(shadow)),
-                _bigV(outline),
-                _bigV(null, color: Colors.white),
-              ]),
-              Positioned(bottom: 44, child: Container(width: 9, height: 9,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white))),
-            ],
-            // Yüklənir göstəricisi
-            if (_uploading) Positioned.fill(child: Container(color: Colors.black54,
-                child: const Center(child: CircularProgressIndicator(color: kTeal)))),
-          ]))),
+
+          // ══ HERO ══════════════════════════════════════════
+          SizedBox(
+            height: 330,
+            child: Stack(alignment: Alignment.center, children: [
+
+              // ── Arxa fon ──────────────────────────────────
+              Positioned.fill(child: _buildBackground(p, hasCover)),
+
+              // ── Tünd overlay (şəkil varsa) ─────────────────
+              if (hasCover)
+                Positioned.fill(child: DecoratedBox(
+                  decoration: BoxDecoration(gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black.withAlpha(80), Colors.black.withAlpha(160)],
+                  )),
+                )),
+
+              // ── Animasiyalı "V" (arxa fon yoxdursa) ────────
+              if (!hasCover) ...[
+                // Hərəkətli parıltı halqaları
+                AnimatedBuilder(
+                  animation: _gradAnim,
+                  builder: (_, __) => Positioned(
+                    left: -60 + 40 * _gradAnim.value,
+                    top:  -40 + 30 * _gradAnim.value,
+                    child: Container(width: 260, height: 260,
+                      decoration: BoxDecoration(shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          const Color(0xFF7B2FF7).withAlpha(160),
+                          Colors.transparent,
+                        ]))),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: _gradAnim,
+                  builder: (_, __) => Positioned(
+                    right: -40 + 30 * (1 - _gradAnim.value),
+                    bottom: -20 + 25 * _gradAnim.value,
+                    child: Container(width: 220, height: 220,
+                      decoration: BoxDecoration(shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          const Color(0xFF19D4B4).withAlpha(130),
+                          Colors.transparent,
+                        ]))),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: _gradAnim,
+                  builder: (_, __) => Positioned(
+                    right: 30 + 20 * _gradAnim.value,
+                    top: 20 + 20 * (1 - _gradAnim.value),
+                    child: Container(width: 180, height: 180,
+                      decoration: BoxDecoration(shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          const Color(0xFFFF3EA5).withAlpha(110),
+                          Colors.transparent,
+                        ]))),
+                  ),
+                ),
+                // "V" hərfi — tam ekran genişliyində, kəsilmiş
+                ClipRect(child: SizedBox(width: double.infinity, height: 330,
+                  child: FittedBox(fit: BoxFit.cover, alignment: Alignment.center,
+                    child: Stack(alignment: Alignment.center, children: [
+                      // Kölgə
+                      Transform.translate(offset: const Offset(6, 12),
+                        child: Text('V', style: TextStyle(
+                          fontSize: 320, height: 1,
+                          fontWeight: FontWeight.w900, fontStyle: FontStyle.italic,
+                          foreground: Paint()
+                            ..style = PaintingStyle.stroke..strokeWidth = 28
+                            ..strokeJoin = StrokeJoin.round
+                            ..color = const Color(0x88501AAA),
+                        ))),
+                      // Outline
+                      Text('V', style: TextStyle(
+                        fontSize: 320, height: 1,
+                        fontWeight: FontWeight.w900, fontStyle: FontStyle.italic,
+                        foreground: Paint()
+                          ..style = PaintingStyle.stroke..strokeWidth = 28
+                          ..strokeJoin = StrokeJoin.round
+                          ..color = const Color(0xFF8448E8),
+                      )),
+                      // Əsas ağ
+                      const Text('V', style: TextStyle(
+                        fontSize: 320, height: 1,
+                        fontWeight: FontWeight.w900, fontStyle: FontStyle.italic,
+                        color: Colors.white,
+                      )),
+                    ]),
+                  ),
+                )),
+                // Alt nöqtə
+                Positioned(bottom: 44, child: Container(width: 10, height: 10,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white))),
+              ],
+
+              // ── Yükləmə indikatoru ──────────────────────────
+              if (_uploading)
+                Positioned.fill(child: Container(color: Colors.black54,
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: const [
+                    CircularProgressIndicator(color: kTeal, strokeWidth: 3),
+                    SizedBox(height: 12),
+                    Text('Yüklənir...', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                  ]))),
+            ]),
+          ),
+          // ══════════════════════════════════════════════════
 
           // ── Düymələr ──
           Positioned(top: top + 12, left: 14,
-            child: _Tap(onTap: () => Navigator.of(context).maybePop(), child: const Ico('back', size: 30))),
+            child: _Tap(onTap: () => Navigator.of(context).maybePop(),
+              child: Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(color: Colors.black.withAlpha(90),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withAlpha(50))),
+                child: const Center(child: Ico('back', size: 22)),
+              ))),
           if (_isOwn)
             Positioned(top: top + 12, right: 14,
               child: _Tap(onTap: _pickCover, child: Container(
                 width: 40, height: 40,
-                decoration: BoxDecoration(color: Colors.black.withAlpha(102), borderRadius: BorderRadius.circular(12),
+                decoration: BoxDecoration(color: Colors.black.withAlpha(102),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.white.withAlpha(77))),
                 child: const Center(child: Ico('cam', size: 20)),
               ))),
@@ -620,6 +736,49 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Widget _bigV(Paint? stroke, {Color? color}) => Text('V', style: TextStyle(
       fontSize: 200, height: 1, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic,
       color: stroke == null ? color : null, foreground: stroke));
+
+  /// Arxa fon: lokal fayl > network URL > animasiyalı default gradient
+  Widget _buildBackground(VelvetProfile? p, bool hasCover) {
+    // 1. Lokal seçilmiş fayl (dərhal göstər, yüklənmə gözləmə)
+    if (_localCover != null) {
+      return Image.file(_localCover!, fit: BoxFit.cover, width: double.infinity, height: 330,
+          errorBuilder: (_, __, ___) => _defaultBg());
+    }
+    // 2. Supabase URL (yüklənmiş, kalıcı)
+    if (p?.coverUrl != null && p!.coverUrl!.isNotEmpty) {
+      return Image.network(
+        p.coverUrl!,
+        fit: BoxFit.cover, width: double.infinity, height: 330,
+        // Yüklənərkən default göstər
+        frameBuilder: (ctx, child, frame, loaded) {
+          if (loaded || frame != null) return child;
+          return _defaultBg();
+        },
+        errorBuilder: (_, __, ___) => _defaultBg(),
+      );
+    }
+    // 3. Default animasiyalı gradient
+    return _defaultBg();
+  }
+
+  Widget _defaultBg() => AnimatedBuilder(
+    animation: _gradAnim,
+    builder: (_, __) {
+      final t = _gradAnim.value;
+      return DecoratedBox(decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(const Color(0xFF5B1FD4), const Color(0xFF8B3FF7), t)!,
+            Color.lerp(const Color(0xFF9B4FF8), const Color(0xFF6B2FD0), t)!,
+            Color.lerp(const Color(0xFFD08CFF), const Color(0xFFB06BFF), t)!,
+          ],
+          stops: const [0, 0.55, 1],
+        ),
+      ));
+    },
+  );
 
   Widget _sheet(VelvetProfile? p, double top) => Stack(clipBehavior: Clip.none, children: [
     Container(
