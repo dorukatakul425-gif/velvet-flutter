@@ -3,22 +3,26 @@
 // QURAŞDIRMA
 //  1) pubspec.yaml → dependencies: altına əlavə et:
 //        flutter_svg: ^2.0.10
-//  2) Bu faylı lib/main.dart kimi saxla (və ya lib/profile_screen.dart + main.dart-da
-//     import edib home: const ProfileScreen() çağır).
-//  3) Başqa heç bir fayl lazım deyil — bütün ekranlar və köməkçilər bu fayldadır.
+//        image_picker: ^1.0.7
+//  2) iOS: ios/Runner/Info.plist içinə əlavə et:
+//        <key>NSPhotoLibraryUsageDescription</key>
+//        <string>Arxa fon şəkli seçmək üçün</string>
+//  3) Android: AndroidManifest.xml-ə heç bir əlavə lazım deyil (image_picker avtomatik edir).
+//  4) Bu faylı lib/main.dart kimi saxla.
 //
-// PERFORMANS (köhnə Android cihazlar üçün tətbiq olunub)
-//  • Sonsuz (repeat) animasiya YOXDUR — yalnız bir dəfəlik reveal/progress animasiyaları.
-//  • Sayğac yalnız bir Text-i yeniləyir (ValueListenableBuilder, saniyədə bir).
-//  • Blur/BackdropFilter yoxdur — ucuz statik gradientlər.
-//  • Avatar halqası fırlanmır — statik SweepGradient (bir dəfə çəkilir, heç vaxt yenilənmir).
-//  • SVG ikonlar sətir açarı ilə keşlənir; hamısı professional tək rəngli outline üslubdadır.
-//  • Scroll zamanı setState yoxdur; ağır hissələr RepaintBoundary içindədir.
+// DƏYİŞİKLİKLƏR (v4):
+//  • Tab bar silindi — ekranlar arası keçid NavigatOR ilə
+//  • Ailə, Yaxın dost, SVIP, Agentlik Meydanı sırları silindi
+//  • Pulqabı: elmas ikonu + balansı silindi, yalnız jeton
+//  • Ziyarətçi profili arxa fonu: image_picker ilə foto yükləmə (edit düyməsi)
+//  • Nişanlarım bölümü: açıq/boz fon, real kart dizaynı (FunUp tərzi)
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,33 +49,36 @@ class VelvetApp extends StatelessWidget {
 }
 
 /* ───────────── Rənglər ───────────── */
-const kBg = Color(0xFF07000F);
+const kBg     = Color(0xFF07000F);
 const kPurple = Color(0xFF7B2FF7);
-const kPink = Color(0xFFFF3EA5);
-const kLilac = Color(0xFFC084FC);
-const kTeal = Color(0xFF19D4B4);
-const kGold = Color(0xFFF0B429);
+const kPink   = Color(0xFFFF3EA5);
+const kLilac  = Color(0xFFC084FC);
+const kTeal   = Color(0xFF19D4B4);
+const kGold   = Color(0xFFF0B429);
 const kOrange = Color(0xFFFF7336);
-const kMut = Color(0x8CE9E2FF);
-const kInk = Color(0xFFF1EAFF);
+const kMut    = Color(0x8CE9E2FF);
+const kInk    = Color(0xFFF1EAFF);
 
-/* ───────────── SVG ikonlar (professional tək rəngli outline) ─────────────
-   Bütün ikonlar eyni vizual dildədir: fill none, yumru uclar, vahid qalınlıq.
-   Aksent rənglər yalnız mənada işlədilir (teal = müsbət, gold = dəyər). */
+// Açıq ekranlar üçün (Ziyarətçi profili nişanlar bölümü)
+const kSheetBg    = Color(0xFFF2F2F7);
+const kCardBg     = Color(0xFFF7F6FF);
+const kCardBgWarm = Color(0xFFFDF6EE);
+const kCardBgBlue = Color(0xFFEEF3FF);
+const kCardText   = Color(0xFF111111);
+const kCardSub    = Color(0xFF999999);
 
-const String _ink = '#E9E2FF';
-const String _mut = '#B3A8CC';
+/* ───────────── SVG ikonlar ───────────── */
+const String _ink  = '#E9E2FF';
+const String _mut  = '#B3A8CC';
 const String _teal = '#19D4B4';
 const String _gold = '#F0B429';
 const String _pink = '#FF5FA8';
-const String _blue = '#7FB5FF';
 const String _green = '#3FCF6A';
 
 String _st(String c, [double w = 2.2]) =>
     'fill="none" stroke="$c" stroke-width="$w" stroke-linecap="round" stroke-linejoin="round"';
 
 final Map<String, (String, String)> _icons = {
-  // ——— Statistikalar ———
   'room': ('0 0 32 32',
       '<path d="M5 14.5L16 5l11 9.5V26a2.5 2.5 0 01-2.5 2.5h-17A2.5 2.5 0 015 26z" ${_st(_ink)}/>'
       '<path d="M12.5 28.5V19a1.5 1.5 0 011.5-1.5h4a1.5 1.5 0 011.5 1.5v9.5" ${_st(_mut, 2)}/>'),
@@ -86,22 +93,10 @@ final Map<String, (String, String)> _icons = {
       '<circle cx="12" cy="10" r="5.5" ${_st(_ink)}/>'
       '<path d="M3 27.5c0-5.6 4-8.7 9-8.7s9 3.1 9 8.7" ${_st(_ink)}/>'
       '<path d="M20.5 5.4a5.5 5.5 0 010 9.9M24 19.3c3 .9 5 3.4 5 7" ${_st(_mut, 2)}/>'),
-
-  // ——— Menyu ———
   'wallet': ('0 0 32 32',
       '<rect x="4" y="8" width="24" height="18" rx="4.5" ${_st(_ink)}/>'
       '<path d="M28 13.5h-5.5a3.5 3.5 0 000 7H28" ${_st(_mut, 2)}/>'
       '<circle cx="22.8" cy="17" r="1.3" ${_st(_mut, 1.6)}/>'),
-  'family': ('0 0 32 32',
-      '<circle cx="11" cy="10" r="5" ${_st(_ink)}/>'
-      '<path d="M3 27c0-5 3.4-8 8-8s8 3 8 8" ${_st(_ink)}/>'
-      '<circle cx="22.5" cy="11.5" r="4" ${_st(_mut, 2)}/>'
-      '<path d="M21 19.6c4.2.3 7 3 7 7.4" ${_st(_mut, 2)}/>'),
-  'heart': ('0 0 32 32',
-      '<path d="M16 27C4.8 19.5 3.8 11.6 9.6 8c3.4-2.1 5.5.2 6.4 2.1.9-1.9 3-4.2 6.4-2.1 5.8 3.6 4.8 11.5-6.4 19z" ${_st(_ink)}/>'),
-  'svip': ('0 0 32 32',
-      '<path d="M5 22l-2-11 8 5 5-9 5 9 8-5-2 11z" ${_st(_gold)}/>'
-      '<path d="M6.5 26.5h19" ${_st(_gold, 2)}/>'),
   'vip': ('0 0 32 32',
       '<path d="M9 6h14l6 7-13 14L3 13z" ${_st(_gold)}/>'
       '<path d="M3 13h26M9 6l3.5 7L16 27l3.5-14L23 6" ${_st(_gold, 1.4)}/>'),
@@ -116,9 +111,6 @@ final Map<String, (String, String)> _icons = {
       '<path d="M4.5 11l9.5 7 9.5-7" ${_st(_ink, 2)}/>'
       '<circle cx="24.5" cy="24" r="6" fill="#07000F" ${_st(_teal, 2)}/>'
       '<path d="M24.5 21v6M21.5 24h6" ${_st(_teal, 2)}/>'),
-  'agent': ('0 0 32 32',
-      '<path d="M16 4l10 3.3v8.2c0 6.6-4.3 10.4-10 12.5-5.7-2.1-10-5.9-10-12.5V7.3z" ${_st(_ink)}/>'
-      '<path d="M16 11l1.5 3 3.3.5-2.4 2.3.6 3.3-3-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.5z" ${_st(_teal, 1.7)}/>'),
   'chat': ('0 0 32 32',
       '<path d="M16 5C9.4 5 4 9.4 4 14.8c0 2.9 1.5 5.5 3.9 7.3L6.5 27l5.3-2.4c1.3.4 2.7.6 4.2.6 6.6 0 12-4.4 12-9.8S22.6 5 16 5z" ${_st(_ink)}/>'
       '<path d="M11.5 14.5q4.5 4 9 0" ${_st(_teal, 2)}/>'),
@@ -129,15 +121,11 @@ final Map<String, (String, String)> _icons = {
   'set': ('0 0 32 32',
       '<circle cx="16" cy="16" r="5.5" ${_st(_ink)}/>'
       '<path d="M16 3.5v3.7M16 24.8v3.7M3.5 16h3.7M24.8 16h3.7M7 7l2.6 2.6M22.4 22.4L25 25M25 7l-2.6 2.6M9.6 22.4L7 25" ${_st(_mut, 2)}/>'),
-
-  // ——— Kiçik ikonlar ———
   'coin': ('0 0 24 24',
       '<circle cx="12" cy="12" r="8.6" ${_st(_gold, 1.8)}/>'
       '<path d="M12 7.6l1.2 2.5 2.7.4-2 1.9.5 2.7-2.4-1.3-2.4 1.3.5-2.7-2-1.9 2.7-.4z" ${_st(_gold, 1.3)}/>'),
-  'gem': ('0 0 24 24',
-      '<path d="M7.5 4h9L21 9.5 12 20 3 9.5z" ${_st(_blue, 1.8)}/>'
-      '<path d="M3 9.5h18M7.5 4l2.2 5.5L12 20l2.3-10.5L16.5 4" ${_st(_blue, 1.1)}/>'),
   'chev': ('0 0 16 16', '<path d="M6 3.5L10.5 8 6 12.5" ${_st(_ink, 2)}/>'),
+  'chevDark': ('0 0 16 16', '<path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="#AAAAAA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
   'copy': ('0 0 16 16',
       '<rect x="5.5" y="5.5" width="8" height="8" rx="2" ${_st(_mut, 1.6)}/>'
       '<path d="M10.5 3.5h-6A1.5 1.5 0 003 5v6" ${_st(_mut, 1.6)}/>'),
@@ -145,10 +133,10 @@ final Map<String, (String, String)> _icons = {
       '<path d="M17 5H9a5 5 0 00-5 5v13a5 5 0 005 5h13a5 5 0 005-5v-8" ${_st(_ink)}/>'
       '<path d="M13 19l1-4.5L25.5 3 29 6.5 17.5 18z" ${_st(_ink)}/>'),
   'back': ('0 0 24 24', '<path d="M15 4.5L7.5 12l7.5 7.5" ${_st(_ink, 2.4)}/>'),
+  'backDark': ('0 0 24 24', '<path d="M15 4.5L7.5 12l7.5 7.5" fill="none" stroke="#333333" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'),
   'clock': ('0 0 16 16',
       '<circle cx="8" cy="8" r="6.3" ${_st(_ink, 1.6)}/>'
       '<path d="M8 4.5V8l2.4 1.5" ${_st(_ink, 1.6)}/>'),
-  'check': ('0 0 24 24', '<path d="M4.5 12.5l5 5 10-11" ${_st(_teal, 2.6)}/>'),
   'lv': ('0 0 16 16',
       '<circle cx="8" cy="8" r="6.6" ${_st(_teal, 1.7)}/>'
       '<path d="M8 4.8L10.6 9 8 11.2 5.4 9z" ${_st(_teal, 1.3)}/>'),
@@ -186,11 +174,8 @@ final Map<String, (String, String)> _icons = {
       '<path d="M32 17v39" ${_st(_gold, 3)}/>'
       '<path d="M32 17c-9-3-17-5-14.5-11.5S28 6.5 32 17zm0 0c9-3 17-5 14.5-11.5S36 6.5 32 17z" ${_st(_gold, 3)}/>'),
   'car': ('0 0 64 40',
-      '<path d="M4 26c0-3.5 2.6-5.4 7-6.3l10-7.2c2-1.3 4-2 6.5-2h9c3.5 0 6.4 1.3 8.5 3.5l4.5 4.6c3.8.9 6.5 2 6.5 5.4V27c0 1.4-1 2.5-2.5 2.5h-47A2.5 2.5 0 014 27z" ${_st(_ink, 2.4)}/>'
-      '<circle cx="18" cy="30" r="5.5" ${_st(_ink, 2.4)}/><circle cx="47" cy="30" r="5.5" ${_st(_ink, 2.4)}/>'
-      '<path d="M25 13.5L20 19h14v-7h-4.5c-1.8 0-3.3.5-4.5 1.5z" ${_st(_mut, 1.8)}/>'),
-
-  // ——— Nişanlar ———
+      '<path d="M4 26c0-3.5 2.6-5.4 7-6.3l10-7.2c2-1.3 4-2 6.5-2h9c3.5 0 6.4 1.3 8.5 3.5l4.5 4.6c3.8.9 6.5 2 6.5 5.4V27c0 1.4-1 2.5-2.5 2.5h-47A2.5 2.5 0 014 27z" ${_st(_mut, 2.4)}/>'
+      '<circle cx="18" cy="30" r="5.5" ${_st(_mut, 2.4)}/><circle cx="47" cy="30" r="5.5" ${_st(_mut, 2.4)}/>'),
   'b1': ('0 0 48 48',
       '<path d="M24 3l5.5 3.6 6.5-.9 2.7 6.4 5.6 3.6-1.8 6.3 1.8 6.3-5.6 3.6-2.7 6.4-6.5-.9L24 41l-5.5-3.6-6.5.9-2.7-6.4-5.6-3.6 1.8-6.3-1.8-6.3 5.6-3.6 2.7-6.4 6.5.9z" ${_st(_gold, 2.4)}/>'
       '<path d="M24 14l8 7-8 11-8-11z" ${_st(_gold, 2)}/>'),
@@ -199,8 +184,11 @@ final Map<String, (String, String)> _icons = {
       '<circle cx="24" cy="24" r="8.5" ${_st(_pink, 1.7)}/>'
       '<path d="M24 20l1.6 3.4 3.7.4-2.7 2.5.7 3.6-3.3-1.8-3.3 1.8.7-3.6-2.7-2.5 3.7-.4z" ${_st(_pink, 1.3)}/>'
       '<path d="M11 36l-4 8 7-2.6M37 36l4 8-7-2.6" ${_st(_gold, 2)}/>'),
-
-  // ——— Zənginlik ekranı ———
+  'family': ('0 0 32 32',
+      '<circle cx="11" cy="10" r="5" ${_st(_ink)}/>'
+      '<path d="M3 27c0-5 3.4-8 8-8s8 3 8 8" ${_st(_ink)}/>'
+      '<circle cx="22.5" cy="11.5" r="4" ${_st(_mut, 2)}/>'
+      '<path d="M21 19.6c4.2.3 7 3 7 7.4" ${_st(_mut, 2)}/>'),
   'tri': ('0 0 120 120',
       '<circle cx="60" cy="60" r="53" ${_st('#37D67A', 3)}/>'
       '<path d="M60 27l33 56H27z" ${_st('#7DFFB8', 3)}/>'
@@ -215,19 +203,22 @@ final Map<String, (String, String)> _icons = {
   'pAura': ('0 0 64 64',
       '<circle cx="32" cy="32" r="24" ${_st(_gold, 2)}/>'
       '<circle cx="32" cy="32" r="16" ${_st(_gold, 2)}/>'
-      '<circle cx="32" cy="32" r="8" ${_st(_gold, 1.6)}/>'
-      '<circle cx="12" cy="46" r="3" ${_st(_gold, 1.6)}/><circle cx="52" cy="18" r="2.5" ${_st(_gold, 1.6)}/>'),
+      '<circle cx="32" cy="32" r="8" ${_st(_gold, 1.6)}/>'),
   'pCrest': ('0 0 64 64',
-      '<path d="M32 6l20 8v16c0 14-9 22-20 28C21 52 12 44 12 30V14z" ${_st(_lilacHex, 2.6)}/>'
+      '<path d="M32 6l20 8v16c0 14-9 22-20 28C21 52 12 44 12 30V14z" fill="none" stroke="#C084FC" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'
       '<path d="M32 16l8 7-8 16-8-16z" ${_st(_gold, 2)}/>'),
   'pRing': ('0 0 64 64',
       '<circle cx="32" cy="34" r="19" ${_st(_gold, 4)}/>'
       '<circle cx="32" cy="10" r="4" ${_st(_gold, 2)}/>'),
+  'cal': ('0 0 32 32',
+      '<rect x="3" y="6" width="26" height="20" rx="4" ${_st(_ink, 2)}/>'
+      '<path d="M8 12h16M8 16h10M8 20h6" ${_st(_mut, 1.8)}/>'),
+  'pen': ('0 0 32 32',
+      '<path d="M17 5H9a5 5 0 00-5 5v13a5 5 0 005 5h13a5 5 0 005-5v-8" ${_st(_ink)}/>'
+      '<path d="M13 19l1-4.5L25.5 3 29 6.5 17.5 18z" ${_st(_ink)}/>'),
 };
 
-const String _lilacHex = '#C084FC';
-
-/// SVG ikon (sətir açarı ilə keşlənir)
+/// SVG ikon
 class Ico extends StatelessWidget {
   final String name;
   final double size;
@@ -277,7 +268,6 @@ Route<T> velvetSlide<T>(Widget page) => PageRouteBuilder<T>(
       },
     );
 
-/// Girişdə aşağıdan yuxarı yumşaq, TƏK DƏFƏLİK çıxış (sonsuz deyil)
 class _Reveal extends StatefulWidget {
   final int delay;
   final Widget child;
@@ -311,7 +301,6 @@ class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
       );
 }
 
-/// Basanda yumşaq kiçilən düymə
 class _Tap extends StatefulWidget {
   final VoidCallback onTap;
   final Widget child;
@@ -336,7 +325,6 @@ class _TapState extends State<_Tap> {
       );
 }
 
-/// Avatar — statik halqa, fırlanma YOXDUR (bir dəfə çəkilir)
 class _Avatar extends StatelessWidget {
   final double size;
   final bool online;
@@ -387,8 +375,9 @@ class _Avatar extends StatelessWidget {
                   height: 15,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF00FF88),
+                    color: kTeal,
                     border: Border.all(color: kBg, width: 2.5),
+                    boxShadow: const [BoxShadow(color: kTeal, blurRadius: 8)],
                   ),
                 ),
               ),
@@ -418,12 +407,10 @@ class _Chip extends StatelessWidget {
       );
 }
 
-/// Yuxarı işıqlanma — statik, animasiyasız (blur yoxdur)
 class _Aurora extends StatelessWidget {
   const _Aurora();
   Widget _blob(double w, double h, Color c) => Container(
-        width: w,
-        height: h,
+        width: w, height: h,
         decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [c, c.withAlpha(0)])),
       );
   @override
@@ -669,6 +656,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
+  // Dəyişiklik: Ailə, Yaxın dost, SVIP silindi; Pulqabı — yalnız jeton
   Widget _card1() => _MenuCard(rows: [
         _Item('wallet', 'Pulqabı', () => velvetToast(context, 'Pulqabı'), right: Container(
           padding: const EdgeInsets.fromLTRB(6, 5, 13, 5),
@@ -677,35 +665,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Ico('coin', size: 20),
             SizedBox(width: 6),
             Text('40', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            SizedBox(width: 8),
-            SizedBox(width: 1, height: 14, child: ColoredBox(color: Color(0x33FFFFFF))),
-            SizedBox(width: 8),
-            Ico('gem', size: 20),
-            SizedBox(width: 6),
-            Text('0', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           ]),
         )),
-        _Item('family', 'Ailə', () => velvetToast(context, 'Ailə'), right: Row(mainAxisSize: MainAxisSize.min, children: const [
-          Ico('coin', size: 18),
-          SizedBox(width: 5),
-          Text('Qoşul, ', style: TextStyle(fontSize: 13, color: kMut)),
-          Text('30 Jeton qazan', style: TextStyle(fontSize: 13, color: Color(0xFFFFA033))),
-        ])),
-        _Item('heart', 'Yaxın dost', () => velvetToast(context, 'Yaxın dost'), text: 'İlk yaxın dostunu əlavə et'),
-        _Item('svip', 'SVIP', () => velvetToast(context, 'SVIP'), text: 'Get və aç'),
         _Item('vip', 'VIP', () => velvetToast(context, 'VIP'), text: 'VIP 0', color: kMut),
         _Item('store', 'Mağaza', () => velvetToast(context, 'Mağaza')),
         _Item('shirt', 'Aksesuar', () => velvetToast(context, 'Aksesuar')),
       ]);
 
+  // Dəyişiklik: Agentlik Meydanı silindi
   Widget _card2() => _MenuCard(rows: [
         _Item('invite', 'Dost dəvət et', () => velvetToast(context, 'Dost dəvət et'),
             text: 'Jeton qazan', color: const Color(0xFFFFB020)),
-        _Item('agent', 'Agentlik Meydanı', () => velvetToast(context, 'Agentlik Meydanı')),
         _Item('chat', 'Onlayn müştəri xidməti', () => velvetToast(context, 'Onlayn müştəri xidməti')),
         _Item('fb', 'Problem bildir', () => velvetToast(context, 'Problem bildir')),
         _Item('set', 'Parametrlər', () => Navigator.of(context).push(velvetSlide(const ParametrlerScreen())),
-            text: 'Hesabınız risk altındadır, e-poçt bağlayın', color: const Color(0xFFFF6B8A)),
+            text: 'Hesabınız risk altındadır', color: const Color(0xFFFF6B8A)),
       ]);
 }
 
@@ -794,6 +768,16 @@ class PublicProfileScreen extends StatefulWidget {
 
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   final _copied = ValueNotifier<bool>(false);
+  // Arxa fon şəkli
+  File? _bgImage;
+  final _picker = ImagePicker();
+
+  Future<void> _pickBg() async {
+    final xf = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (xf != null && mounted) {
+      setState(() => _bgImage = File(xf.path));
+    }
+  }
 
   @override
   void dispose() {
@@ -819,37 +803,75 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Stack(fit: StackFit.passthrough, children: [
-          // Üz qabığı — statik, animasiyasız
+          // Hero arxa fon
           RepaintBoundary(
             child: SizedBox(
               height: 330,
               child: Stack(alignment: Alignment.center, children: [
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0xFF6F3DF0), Color(0xFFA566F8), Color(0xFFD08CFF)],
-                        stops: [0, .62, 1],
+                // Arxa fon: yüklənmiş şəkil varsa onu göstər, yoxsa gradient
+                Positioned.fill(
+                  child: _bgImage != null
+                      ? Image.file(_bgImage!, fit: BoxFit.cover)
+                      : const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xFF6F3DF0), Color(0xFFA566F8), Color(0xFFD08CFF)],
+                              stops: [0, .62, 1],
+                            ),
+                          ),
+                        ),
+                ),
+                // Şəkil varsa üzərindən tünd overlay
+                if (_bgImage != null)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.black.withAlpha(115), Colors.black.withAlpha(179)],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Stack(alignment: Alignment.center, children: [
-                  Transform.translate(offset: const Offset(0, 10), child: _bigV(shadow)),
-                  _bigV(outline),
-                  _bigV(null, color: Colors.white),
-                ]),
-                Positioned(
-                  bottom: 44,
-                  child: Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white)),
-                ),
+                // "V" hərfi — yalnız şəkil yoxdursa göstər
+                if (_bgImage == null) ...[
+                  Stack(alignment: Alignment.center, children: [
+                    Transform.translate(offset: const Offset(0, 10), child: _bigV(shadow)),
+                    _bigV(outline),
+                    _bigV(null, color: Colors.white),
+                  ]),
+                  Positioned(
+                    bottom: 44,
+                    child: Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white)),
+                  ),
+                ],
               ]),
             ),
           ),
-          Positioned(top: top + 12, left: 14, child: _Tap(onTap: () => Navigator.of(context).maybePop(), child: const Ico('back', size: 30))),
-          Positioned(top: top + 12, right: 14, child: _Tap(onTap: () => velvetToast(context, 'Profili redaktə et'), child: const Ico('edit', size: 30))),
+          // Düymələr
+          Positioned(
+            top: top + 12, left: 14,
+            child: _Tap(onTap: () => Navigator.of(context).maybePop(), child: const Ico('back', size: 30)),
+          ),
+          // Edit düyməsi → foto seç
+          Positioned(
+            top: top + 12, right: 14,
+            child: _Tap(
+              onTap: _pickBg,
+              child: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(102),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withAlpha(77)),
+                ),
+                child: const Center(child: Ico('edit', size: 20)),
+              ),
+            ),
+          ),
           // Alt vərəq
           Padding(padding: const EdgeInsets.only(top: 296), child: _sheet()),
         ]),
@@ -865,79 +887,141 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Widget _sheet() => Stack(clipBehavior: Clip.none, children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 44),
           decoration: const BoxDecoration(
             color: kBg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             boxShadow: [BoxShadow(color: Color(0x337B2FF7), blurRadius: 30, offset: Offset(0, -10))],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(
-              height: 56,
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                const Text('Azərbaycan', style: TextStyle(fontSize: 15, color: kMut)),
-                const SizedBox(width: 10),
-                Container(width: 1, height: 16, color: const Color(0x26FFFFFF)),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () {
-                    Clipboard.setData(const ClipboardData(text: '48219037'));
-                    HapticFeedback.lightImpact();
-                    _copied.value = true;
-                    velvetToast(context, 'ID kopyalandı');
-                    Future.delayed(const Duration(milliseconds: 1500), () {
-                      if (mounted) _copied.value = false;
-                    });
-                  },
-                  child: Row(children: [
-                    const Text('ID:48219037', style: TextStyle(fontSize: 15, color: kMut)),
-                    const SizedBox(width: 5),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _copied,
-                      builder: (_, c, __) => Ico(c ? 'lv' : 'copy', size: 15),
-                    ),
-                  ]),
-                ),
+            // Üst sıra: ölkə + ID
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: SizedBox(
+                height: 56,
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  const Text('Azərbaycan', style: TextStyle(fontSize: 15, color: kMut)),
+                  const SizedBox(width: 10),
+                  Container(width: 1, height: 16, color: const Color(0x26FFFFFF)),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(const ClipboardData(text: '48219037'));
+                      HapticFeedback.lightImpact();
+                      _copied.value = true;
+                      velvetToast(context, 'ID kopyalandı');
+                      Future.delayed(const Duration(milliseconds: 1500), () {
+                        if (mounted) _copied.value = false;
+                      });
+                    },
+                    child: Row(children: [
+                      const Text('ID:48219037', style: TextStyle(fontSize: 15, color: kMut)),
+                      const SizedBox(width: 5),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _copied,
+                        builder: (_, c, __) => Ico(c ? 'lv' : 'copy', size: 15),
+                      ),
+                    ]),
+                  ),
+                ]),
+              ),
+            ),
+            // Ad və chiplar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+              child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: const [
+                Text('Velvet istifadəçisi', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
+                _Chip('age', '22', fg: Color(0xFFCFC6EA)),
+                _Chip('leaf', 'Yeni başlayan', grad: LinearGradient(colors: [Color(0xFF2FD84A), Color(0xFF8BE34A)])),
+                _Chip('lv', '1', grad: LinearGradient(colors: [Color(0xFF0FAE5F), Color(0xFF2BD6A0)])),
               ]),
             ),
-            const SizedBox(height: 22),
-            const Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text('Velvet istifadəçisi', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
-              _Chip('age', '22', fg: Color(0xFFCFC6EA)),
-              _Chip('leaf', 'Yeni başlayan', grad: LinearGradient(colors: [Color(0xFF2FD84A), Color(0xFF8BE34A)])),
-              _Chip('lv', '1', grad: LinearGradient(colors: [Color(0xFF0FAE5F), Color(0xFF2BD6A0)])),
-            ]),
-            const SizedBox(height: 10),
-            const Text('1 İzlənilən · 0 İzləyici', style: TextStyle(fontSize: 17, color: kMut)),
-            const SizedBox(height: 34),
-            const Text('Nişanlarım', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 18),
-            Row(children: [
-              Expanded(child: _Honor('SVIP', 'Hələ əldə edilməyib', 'b1', const Color(0xFFFF8C50), isNew: true, onTap: () => velvetToast(context, 'SVIP'))),
-              const SizedBox(width: 10),
-              Expanded(child: _Honor('VIP', 'Hələ əldə edilməyib', 'b2', const Color(0xFFFFBE46), isNew: true, onTap: () => velvetToast(context, 'VIP'))),
-              const SizedBox(width: 10),
-              Expanded(child: _Honor('Ailə', 'Qoşulmayıb', 'family', const Color(0xFF5A8CFF), onTap: () => velvetToast(context, 'Ailə'))),
-            ]),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: _Honor('Avtomobil', 'Hələ əldə edilməyib', 'car', const Color(0xFF96A0FF), h: 84, iw: 54, ih: 40, onTap: () => velvetToast(context, 'Avtomobil'))),
-              const SizedBox(width: 10),
-              Expanded(child: _Honor('Hədiyyə divarı', '0/450', 'gift', kLilac, h: 84, iw: 44, ih: 44, onTap: () => velvetToast(context, 'Hədiyyə divarı'))),
-            ]),
-            _LineRow('Yaxın dost', 'dəvət et', () => velvetToast(context, 'Yaxın dost')),
-            _LineRow('Paylaşımlar', 'Möhtəşəm anlarını paylaş', () => velvetToast(context, 'Paylaşımlar')),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Text('1 İzlənilən · 0 İzləyici', style: TextStyle(fontSize: 17, color: kMut)),
+            ),
+
+            // ─── Nişanlarım — açıq fon bölümü ───
             const SizedBox(height: 24),
-            const Text('Şəxsi məlumat', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            const _Info('cal', 'Velvet-də bu gün 3-cü gün'),
-            const _Info('pen', 'Heç bir məlumat qoyulmayıb~'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text('Nişanlarım', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 14),
+
+            // Nişan kartları — açıq bölüm
+            Container(
+              color: kSheetBg,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+              child: Column(children: [
+                // Sıra 1: SVIP, VIP, Ailə
+                Row(children: [
+                  Expanded(child: _HonorCard(
+                    title: 'SVIP', sub: 'Hələ əldə edilməyib',
+                    bg: kCardBgWarm, icon: 'b1', iconColor: kGold,
+                    isNew: true, onTap: () => velvetToast(context, 'SVIP'),
+                  )),
+                  const SizedBox(width: 9),
+                  Expanded(child: _HonorCard(
+                    title: 'VIP', sub: 'Hələ əldə edilməyib',
+                    bg: kCardBgWarm, icon: 'b2', iconColor: kPink,
+                    isNew: true, onTap: () => velvetToast(context, 'VIP'),
+                  )),
+                  const SizedBox(width: 9),
+                  Expanded(child: _HonorCard(
+                    title: 'Ailə', sub: 'Qoşulmayıb',
+                    bg: kCardBgBlue, icon: 'family', iconColor: const Color(0xFF4A80E8),
+                    onTap: () => velvetToast(context, 'Ailə'),
+                  )),
+                ]),
+                const SizedBox(height: 9),
+                // Sıra 2: Avtomobil, Hədiyyə divarı
+                Row(children: [
+                  Expanded(child: _HonorCard(
+                    title: 'Avtomobil', sub: 'Hələ əldə edilməyib',
+                    bg: kCardBg, icon: 'car', iconColor: const Color(0xFF9090B8),
+                    iconW: 60, iconH: 38, minH: 84,
+                    isNew: true, onTap: () => velvetToast(context, 'Avtomobil'),
+                  )),
+                  const SizedBox(width: 9),
+                  Expanded(child: _HonorCard(
+                    title: 'Hədiyyə divarı', sub: '0/450',
+                    bg: kCardBg, icon: 'gift', iconColor: kLilac,
+                    iconW: 44, iconH: 44, minH: 84,
+                    onTap: () => velvetToast(context, 'Hədiyyə divarı'),
+                  )),
+                ]),
+              ]),
+            ),
+
+            // Yakın arkadaş + Paylaşımlar sıraları — açıq fon
+            Container(
+              color: Colors.white,
+              child: Column(children: [
+                _LightRow('Yakın arkadaş', 'davet et', () => velvetToast(context, 'Yakın arkadaş')),
+                const Divider(height: 1, color: Color(0xFFEEEEEE), indent: 16, endIndent: 16),
+                _LightRow('Paylaşımlar', 'Möhtəşəm anlarını paylaş', () => velvetToast(context, 'Paylaşımlar')),
+              ]),
+            ),
+            const SizedBox(height: 8),
+
+            // Şəxsi məlumat
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+                Text('Şəxsi məlumat', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
+                SizedBox(height: 4),
+                _Info('cal', 'Velvet-də bu gün 3-cü gün'),
+                _Info('pen', 'Heç bir məlumat qoyulmayıb~'),
+              ]),
+            ),
+            const SizedBox(height: 44),
           ]),
         ),
+        // Avatar
         const Positioned(left: 18, top: -58, child: _Avatar(size: 88, online: true)),
+        // Onlayn badge
         Positioned(
-          left: 14,
-          top: 26,
+          left: 14, top: 26,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
             decoration: BoxDecoration(
@@ -947,7 +1031,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             ),
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
               DecoratedBox(
-                decoration: BoxDecoration(shape: BoxShape.circle, color: kTeal, boxShadow: [BoxShadow(color: kTeal, blurRadius: 8)]),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: kTeal,
+                    boxShadow: [BoxShadow(color: kTeal, blurRadius: 8)]),
                 child: SizedBox(width: 9, height: 9),
               ),
               SizedBox(width: 6),
@@ -958,54 +1043,55 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       ]);
 }
 
-class _Honor extends StatelessWidget {
+/* ─── Açıq fon nişan kartı ─── */
+class _HonorCard extends StatelessWidget {
   final String title, sub, icon;
-  final Color tone;
+  final Color bg, iconColor;
+  final double iconW, iconH, minH;
   final bool isNew;
-  final double h, iw, ih;
   final VoidCallback onTap;
-  const _Honor(this.title, this.sub, this.icon, this.tone,
-      {this.isNew = false, this.h = 100, this.iw = 44, this.ih = 44, required this.onTap});
+  const _HonorCard({
+    required this.title, required this.sub,
+    required this.bg, required this.icon, required this.iconColor,
+    this.iconW = 44, this.iconH = 44, this.minH = 90,
+    this.isNew = false, required this.onTap,
+  });
+
   @override
-  Widget build(BuildContext context) => _Tap(
+  Widget build(BuildContext context) => GestureDetector(
         onTap: onTap,
         child: Container(
-          height: h,
+          constraints: BoxConstraints(minHeight: minH),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: tone.withAlpha(46)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [tone.withAlpha(56), tone.withAlpha(14)],
-            ),
+            color: bg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black.withAlpha(10)),
           ),
           child: Stack(children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kCardText)),
                 const SizedBox(height: 3),
-                FractionallySizedBox(
-                  widthFactor: .66,
-                  child: Text(sub, style: const TextStyle(fontSize: 12.5, color: kMut)),
-                ),
+                Text(sub, style: const TextStyle(fontSize: 12, color: kCardSub)),
               ]),
             ),
-            Positioned(right: 10, bottom: 10, child: Ico(icon, size: iw, height: ih)),
+            Positioned(
+              right: 8, bottom: 8,
+              child: Ico(icon, size: iconW, height: iconH),
+            ),
             if (isNew)
               Positioned(
-                top: 0,
-                right: 0,
+                top: 0, right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(colors: [Color(0xFFFF6A5A), Color(0xFFFF3E7E)]),
-                    borderRadius: BorderRadius.only(topRight: Radius.circular(16), bottomLeft: Radius.circular(10)),
+                    borderRadius: BorderRadius.only(topRight: Radius.circular(14), bottomLeft: Radius.circular(9)),
                   ),
-                  child: const Text('YENİ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                  child: const Text('YENİ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
               ),
           ]),
@@ -1013,25 +1099,22 @@ class _Honor extends StatelessWidget {
       );
 }
 
-class _LineRow extends StatelessWidget {
+/* ─── Açıq fon sıra (Yakın arkadaş, Paylaşımlar) ─── */
+class _LightRow extends StatelessWidget {
   final String title, hint;
   final VoidCallback onTap;
-  const _LineRow(this.title, this.hint, this.onTap);
+  const _LightRow(this.title, this.hint, this.onTap);
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: SizedBox(
-          height: 62,
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700)),
-            Row(children: [
-              Text(hint, style: const TextStyle(fontSize: 15, color: kMut)),
-              const SizedBox(width: 4),
-              const Ico('chev', size: 15, opacity: .5),
+            Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: kCardText)),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(hint, style: const TextStyle(fontSize: 13, color: kCardSub)),
+              const SizedBox(width: 3),
+              const Ico('chevDark', size: 14),
             ]),
           ]),
         ),
@@ -1107,23 +1190,18 @@ class WealthLevelScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Statik projektor şüaları (animasiyasız, bir dəfə çəkilir)
                     Positioned.fill(child: CustomPaint(painter: _BeamPainter())),
                     const Positioned(right: -22, top: 0, child: Padding(
                       padding: EdgeInsets.only(top: 176),
                       child: Ico('podium', size: 200, height: 56),
                     )),
-                    // Nişan — statik işıqlanma
                     Positioned(
-                      right: 34,
-                      top: 78,
+                      right: 34, top: 78,
                       child: SizedBox(
-                        width: 98,
-                        height: 98,
+                        width: 98, height: 98,
                         child: Stack(alignment: Alignment.center, children: [
                           Container(
-                            width: 150,
-                            height: 150,
+                            width: 150, height: 150,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: RadialGradient(colors: [Color(0x5500FF88), Color(0x0000FF88)]),
@@ -1133,7 +1211,6 @@ class WealthLevelScreen extends StatelessWidget {
                         ]),
                       ),
                     ),
-                    // Başlıq
                     Positioned(
                       top: 6, left: 0, right: 0, height: 48,
                       child: Row(children: [
@@ -1151,10 +1228,8 @@ class WealthLevelScreen extends StatelessWidget {
                         ),
                       ]),
                     ),
-                    // Cari səviyyə
                     Positioned(
-                      left: 26,
-                      top: 78,
+                      left: 26, top: 78,
                       child: Row(children: [
                         const _Avatar(size: 46),
                         const SizedBox(width: 10),
@@ -1165,21 +1240,15 @@ class WealthLevelScreen extends StatelessWidget {
                       ]),
                     ),
                     const Positioned(
-                      left: 26,
-                      top: 140,
-                      width: 205,
+                      left: 26, top: 140, width: 205,
                       child: Text.rich(TextSpan(style: TextStyle(fontSize: 14, height: 1.3), children: [
                         TextSpan(text: 'Səviyyə atlamaq üçün '),
                         TextSpan(text: '650', style: TextStyle(fontWeight: FontWeight.w800)),
                         TextSpan(text: ' zənginlik xalı lazımdır.'),
                       ])),
                     ),
-                    // Proqres — TƏK DƏFƏLİK animasiya (TweenAnimationBuilder, controller yoxdur)
                     Positioned(
-                      left: 26,
-                      top: 190,
-                      width: 173,
-                      height: 6,
+                      left: 26, top: 190, width: 173, height: 6,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(3),
                         child: Stack(children: [
@@ -1275,11 +1344,9 @@ class _PerkCard extends StatelessWidget {
                     child: Padding(padding: const EdgeInsets.only(top: 14), child: Ico(pv, size: 58, opacity: .9)),
                   ),
                   Positioned(
-                    right: 12,
-                    bottom: 2,
+                    right: 12, bottom: 2,
                     child: Container(
-                      width: 20,
-                      height: 20,
+                      width: 20, height: 20,
                       decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xB3555555)),
                       child: const Center(child: Ico('play', size: 11)),
                     ),
@@ -1293,11 +1360,9 @@ class _PerkCard extends StatelessWidget {
               const SizedBox(height: 12),
             ]),
             Positioned(
-              left: 8,
-              top: 8,
+              left: 8, top: 8,
               child: Container(
-                width: 24,
-                height: 24,
+                width: 24, height: 24,
                 decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF5B4BF0)),
                 child: const Center(child: Ico('lock', size: 12)),
               ),
@@ -1307,7 +1372,6 @@ class _PerkCard extends StatelessWidget {
       );
 }
 
-/// Başlığın alt kənarı: mərkəzdə yuxarı qalxan qövs
 class _ArcClipper extends CustomClipper<Path> {
   const _ArcClipper();
   @override
@@ -1320,7 +1384,6 @@ class _ArcClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> old) => false;
 }
 
-/// Projektor şüaları — statik (animasiya yoxdur, repaint yoxdur)
 class _BeamPainter extends CustomPainter {
   const _BeamPainter();
   @override
@@ -1332,26 +1395,21 @@ class _BeamPainter extends CustomPainter {
         ..lineTo(s.width * d, s.height)
         ..lineTo(s.width * e, s.height)
         ..close();
-      c.drawPath(
-        path,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.white.withAlpha(alpha), Colors.white.withAlpha(0)],
-          ).createShader(Offset.zero & s),
-      );
+      c.drawPath(path, Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withAlpha(alpha), Colors.white.withAlpha(0)],
+        ).createShader(Offset.zero & s));
     }
-
     beam(.58, .78, .30, 1.02, 40);
     beam(.66, .72, .50, .96, 26);
   }
-
   @override
   bool shouldRepaint(covariant _BeamPainter old) => false;
 }
 
-/* ═════════════════ PARAMETRLƏR (bu faylın içində, ayrı fayl lazım deyil) ═════════════════ */
+/* ═════════════════ PARAMETRLƏR ═════════════════ */
 class ParametrlerScreen extends StatelessWidget {
   const ParametrlerScreen({super.key});
 
@@ -1382,8 +1440,8 @@ class ParametrlerScreen extends StatelessWidget {
               _Item('chat', 'Bildirişlər', () => velvetToast(context, 'Bildirişlər')),
               _Item('flag', 'Dil', () => velvetToast(context, 'Dil'), text: 'Azərbaycan'),
               _Item('lock', 'Məxfilik', () => velvetToast(context, 'Məxfilik')),
-              _Item('fb', 'Çıxış', () => velvetToast(context, 'Çıxış'), color: const Color(0xFFFF6B8A),
-                  text: 'Hesabdan çıx'),
+              _Item('fb', 'Çıxış', () => velvetToast(context, 'Çıxış'),
+                  color: const Color(0xFFFF6B8A), text: 'Hesabdan çıx'),
             ]),
           ),
         ),
