@@ -215,9 +215,7 @@ class ProfileService {
             file,
             fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
           );
-      final url = _sb.storage.from('avatars').getPublicUrl(path);
-      // Cache buster
-      final publicUrl = '$url?t=${DateTime.now().millisecondsSinceEpoch}';
+      final publicUrl = _sb.storage.from('avatars').getPublicUrl(path);
       await _sb.from('profiles').update({'avatar_url': publicUrl}).eq('id', uid);
       if (current.value != null) {
         current.value = current.value!.copyWith(avatarUrl: publicUrl);
@@ -241,8 +239,7 @@ class ProfileService {
             file,
             fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
           );
-      final url = _sb.storage.from('covers').getPublicUrl(path);
-      final publicUrl = '$url?t=${DateTime.now().millisecondsSinceEpoch}';
+      final publicUrl = _sb.storage.from('covers').getPublicUrl(path);
       await _sb.from('profiles').update({'cover_url': publicUrl}).eq('id', uid);
       if (current.value != null) {
         current.value = current.value!.copyWith(coverUrl: publicUrl);
