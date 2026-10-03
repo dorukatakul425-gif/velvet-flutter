@@ -314,6 +314,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String _getDisplayName(VelvetProfile? p) {
+    if (p == null) return 'Velvet istifadəçisi';
+    final name = p.displayName.trim();
+    if (name.isNotEmpty && name != 'Velvet istifadəçisi') return name;
+    // Email-dən ad al
+    final user = Supabase.instance.client.auth.currentUser;
+    final email = user?.email ?? '';
+    if (email.isNotEmpty) return email.split('@').first;
+    return 'Velvet istifadəçisi';
+  }
+
   Widget _header(VelvetProfile? p) => GestureDetector(
     behavior: HitTestBehavior.opaque,
     onTap: () { HapticFeedback.selectionClick(); Navigator.of(context).push(vRoute(const PublicProfileScreen())); },
@@ -326,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(p?.displayName ?? 'Velvet istifadəçisi', maxLines: 1, overflow: TextOverflow.ellipsis,
+          Text(_getDisplayName(p), maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
           const SizedBox(height: 7),
           Wrap(spacing: 6, runSpacing: 6, children: [
