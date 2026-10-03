@@ -332,7 +332,7 @@ class _LoginState extends State<_Login> {
     try {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'com.velvet.velvet_app://login-callback',
+        redirectTo: 'velvet://login-callback',
         authScreenLaunchMode: LaunchMode.inAppWebView,
       );
     } catch (e) {
