@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'common.dart';
 import 'profile_screen.dart' show Ico, velvetToast;
+import 'services/profile_service.dart';
 import 'profile_dil.dart';
 import 'profile_bildiris.dart';
 
@@ -71,7 +72,19 @@ class ParametrlerScreen extends StatelessWidget {
               ])),
               const SizedBox(height: 14),
               VelvetCard(child: InkWell(
-                onTap: () { HapticFeedback.selectionClick(); velvetToast(context, 'Hesabdan çıx'); appLogout?.call(); },
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  // Online statusu sıfırla
+                  try {
+                    await ProfileService().goOffline();
+                  } catch (_) {}
+                  // Hesabdan çıx
+                  appLogout?.call();
+                  // Bütün ekranları bağla, login-ə qayıt
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                },
                 splashColor: const Color(0x2E7B2FF7),
                 highlightColor: const Color(0x147B2FF7),
                 child: const SizedBox(height: 66, child: Center(child: Text(
