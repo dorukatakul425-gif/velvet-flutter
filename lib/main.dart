@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:app_links/app_links.dart';
 import 'common.dart';
 import 'home_screen.dart';
 import 'room_screen.dart' show RoomScreen;
@@ -324,40 +324,19 @@ class _LoginState extends State<_Login> {
   @override
   void dispose() { _email.dispose(); _pass.dispose(); _user.dispose(); _age.dispose(); super.dispose(); }
 
+
+
   Future<void> _googleLogin() async {
     if (!widget.supabaseReady) { setState(() => _err = 'Serverə qoşulmaq alınmadı'); return; }
     setState(() { _busy = true; _err = null; });
     try {
-      final googleSignIn = GoogleSignIn(
-        serverClientId: '991378775094-it021a3o3rphr29n8ebnkq01jg334dei.apps.googleusercontent.com',
-        scopes: ['email', 'profile', 'openid'],
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'com.velvet.velvet_app://login-callback',
+        authScreenLaunchMode: LaunchMode.inAppWebView,
       );
-
-      await googleSignIn.signOut();
-
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        if (mounted) setState(() { _busy = false; });
-        return;
-      }
-
-      final googleAuth  = await googleUser.authentication;
-      final idToken     = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
-
-      if (idToken == null) {
-        if (mounted) setState(() => _err = 'Google token alınmadı. serverClientId yoxlayın.');
-        if (mounted) setState(() => _busy = false);
-        return;
-      }
-
-      await Supabase.instance.client.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
-      );
-    } on Exception catch (e) {
-      if (mounted) setState(() => _err = 'Xəta: ${e.toString().substring(0, e.toString().length.clamp(0, 80))}');
+    } catch (e) {
+      if (mounted) setState(() => _err = 'Google ilə giriş alınmadı');
     }
     if (mounted) setState(() => _busy = false);
   }
