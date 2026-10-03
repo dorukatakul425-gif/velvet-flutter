@@ -1,12 +1,8 @@
-// Velvet — Bildiriş parametrləri ekranı (Flutter)
-//
-// QURAŞDIRMA
-//  1) Bu faylı profile_screen.dart və profile_parametrler.dart ilə eyni qovluqda saxla.
-//  2) Parametrlər ekranında "Bildiriş parametrləri" sətrinə toxunanda açılır.
-//  3) Açar vəziyyətləri tətbiq işləyənə qədər yadda qalır (_vals).
+// lib/profile_bildiris.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'profile_screen.dart';
+import 'common.dart';
+import 'profile_screen.dart' show Ico;
 import 'profile_parametrler.dart' show VelvetCard, VelvetTopGlow, VelvetPageHeader;
 
 class _Opt {
@@ -24,7 +20,7 @@ class BildirisScreen extends StatefulWidget {
 class _BildirisScreenState extends State<BildirisScreen> {
   static const _groups = <List<_Opt>>[
     [
-      _Opt('Mesaj xatırlatma parametrləri', 'Velvet-i açmadığınız və ya bağlı olduqda dostlarınızdan söhbət bildirişləri ala bilməzsiniz. Zəhmət olmasa açmağa keçin.'),
+      _Opt('Mesaj xatırlatma parametrləri', 'Velvet-i açmadığınız və ya bağlı olduqda dostlarınızdan söhbət bildirişləri ala bilməzsiniz.'),
       _Opt('Narahat etməyin rejimi', 'Aktiv etdikdən sonra 00:00-08:00 saatları arasında mesaj bildirişləri alınmayacaq.'),
       _Opt('Qarşılıqlı əlaqə bildirişi', 'Dinamik bəyənmələr və şərhlər, izləyicilər və ziyarətçi mesajları daxil olmaqla.'),
       _Opt('Tövsiyə olunan mesaj bildirişi', 'İzləyici yenilikləri, ziyarətçi mesajları və s. daxil.'),
@@ -34,11 +30,10 @@ class _BildirisScreenState extends State<BildirisScreen> {
       _Opt('Tətbiqdaxili afişa xatırladıcısı', 'Bu tətbiqdən istifadə edərkən mesajlar afişa şəklində açılacaq.'),
     ],
     [
-      _Opt('Xüsusi söhbət qoruması', 'Bu funksiyanı aktiv etdikdə, yad şəxslər (qarşılıqlı izləşmədiyiniz, heç söhbət etmədiyiniz və ya hədiyyə göndərmədiyiniz şəxslər) sizə birbaşa şəxsi mesaj göndərə bilməz.'),
+      _Opt('Xüsusi söhbət qoruması', 'Bu funksiyanı aktiv etdikdə, yad şəxslər sizə birbaşa şəxsi mesaj göndərə bilməz.'),
     ],
   ];
 
-  // Hər açarın vəziyyəti (sessiya boyunca saxlanılır)
   static final List<List<bool>> _vals = [
     [true, false, true, true, true],
     [true],
@@ -69,7 +64,8 @@ class _BildirisScreenState extends State<BildirisScreen> {
                   for (var i = 0; i < _groups[g].length; i++) ...[
                     if (i > 0) const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 18),
-                      child: SizedBox(height: 1, width: double.infinity, child: ColoredBox(color: Color(0x0FFFFFFF))),
+                      child: SizedBox(height: 1, width: double.infinity,
+                          child: ColoredBox(color: Color(0x0FFFFFFF))),
                     ),
                     _row(g, i),
                   ],
@@ -94,10 +90,10 @@ class _BildirisScreenState extends State<BildirisScreen> {
           padding: const EdgeInsets.fromLTRB(18, 15, 16, 15),
           child: Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(o.title, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w500, color: kInk)),
+              Text(o.title, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w500, color: Color(0xFFF1EAFF))),
               if (o.sub != null) ...[
                 const SizedBox(height: 5),
-                Text(o.sub!, style: const TextStyle(fontSize: 13.5, height: 1.35, color: kMut)),
+                Text(o.sub!, style: const TextStyle(fontSize: 13.5, height: 1.35, color: Color(0x8CE9E2FF))),
               ],
             ])),
             const SizedBox(width: 16),
@@ -109,7 +105,6 @@ class _BildirisScreenState extends State<BildirisScreen> {
   }
 }
 
-/// Firuzəyi açar (tətbiqin vurğu rəngi ilə)
 class _VelvetSwitch extends StatelessWidget {
   final bool on;
   const _VelvetSwitch({required this.on});
@@ -122,17 +117,14 @@ class _VelvetSwitch extends StatelessWidget {
         alignment: on ? Alignment.centerRight : Alignment.centerLeft,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
-          gradient: on ? const LinearGradient(colors: [kTeal, Color(0xFF3FE6C8)]) : null,
+          gradient: on ? const LinearGradient(colors: [Color(0xFF19D4B4), Color(0xFF3FE6C8)]) : null,
           color: on ? null : const Color(0x2EFFFFFF),
           boxShadow: on ? const [BoxShadow(color: Color(0x5519D4B4), blurRadius: 12)] : null,
         ),
         child: Container(
           width: 24, height: 24,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Color(0x40000000), blurRadius: 4, offset: Offset(0, 1))],
-          ),
+          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white,
+              boxShadow: [BoxShadow(color: Color(0x40000000), blurRadius: 4, offset: Offset(0, 1))]),
         ),
       );
 }
