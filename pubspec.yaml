@@ -17,6 +17,7 @@ dependencies:
   supabase_flutter: ^2.8.0
   flutter_svg: ^2.0.10
   image_picker: ^1.0.7
+  google_sign_in: ^6.2.1
 
   # Hediye animasyonları için eklendi:
   video_player: ^2.9.2
